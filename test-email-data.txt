@@ -1,0 +1,69 @@
+PRZYKŁADOWE DANE Z EMAILA DO TESTOWANIA PARSERA
+================================================
+
+Data: 20.11.2025
+Zmiana: 1
+Brygada: MICHALAK
+Ilość pracowników: 17
+
+M1
+Zadrukowano: 1245
+Pobrano: 875
+Ilość zleceń: 2
+Klient: valsemolen
+
+M2
+Zadrukowano: 1204
+Pobrano: 1263
+Ilość zleceń: 2
+Klient: tienen
+
+M3
+Zadrukowano: 737
+Pobrano: 764
+Ilość zleceń: 1
+Klient: upm
+
+M4
+Zadrukowano: 841
+Pobrano: 1227
+Ilość zleceń: 3
+Klient: upm
+
+M5
+Zadrukowano: 260
+Pobrano: 388
+Ilość zleceń: 3
+Klient: kdkw
+
+M6 (STREFA)
+Zadrukowano: 3647
+Pobrano: 3985
+Ilość zleceń: 2
+Klient: prost key + p&l
+
+SOMA 2 (STREFA)
+Zadrukowano: 3976
+Pobrano: 3616
+Ilość zleceń: 1
+Klient: malltas
+
+NOVOFLEX 1 (STREFA)
+Zadrukowano: 2166
+Pobrano: 2209
+Ilość zleceń: 2
+Klient: sudzucker
+
+Odpad papier biały: M1=139, M2=77, M3=38, M4=145, M5=130, M6=59, SOMA 2=50, NOVOFLEX 1=106
+
+Odpad papier PE/folia: 0
+
+Odpad opakowanie szare/ papier szary: M1=6, M2=6, M6=16, SOMA 2=27, NOVOFLEX 1=18
+
+Adnotacje (awarie, przerwane wzory, uszkodzone klisze) PROSZĘ WPISYWAĆ NUMERY ZP:
+Przelaczanie zasilania M3 – Mycie sekcji x 5
+M3, M6 ponowne restary maszyn po przelaczeniu zasilania
+Soma 1 – przestewa na povazky, 2 x zryw papieru, Mycie sekcji x 2, Zbrojenie x 4
+
+Nieobecności pracowników:
+Brak

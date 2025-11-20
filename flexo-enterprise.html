@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flexo PRO Enterprise - System Produkcyjny</title>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --bg-tertiary: #3d3d3d;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --accent: #ff6b35;
+            --accent-hover: #ff8555;
+            --border: #404040;
+            --success: #7bed9f;
+            --warning: #ffa502;
+            --danger: #ff6348;
+            --info: #70a1ff;
+
+            /* Kolory brygad */
+            --brigade-michalak: #7bed9f;
+            --brigade-gajda: #ffa502;
+            --brigade-wronka: #ff6348;
+            --brigade-smandzik: #70a1ff;
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #f5f5f5;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #e8e8e8;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --border: #d0d0d0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            padding: 1rem 2rem;
+            border-bottom: 2px solid var(--accent);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--accent);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .theme-toggle {
+            background: var(--bg-tertiary);
+            border: none;
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent);
+        }
+
+        /* Navigation */
+        .nav-tabs {
+            background: var(--bg-secondary);
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem 2rem;
+            overflow-x: auto;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-tab {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+
+        .nav-tab:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-tab.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .kpi-card h3 {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .kpi-card .subtext {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        /* Import Section */
+        .import-container {
+            background: var(--bg-secondary);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .import-instructions {
+            background: var(--bg-tertiary);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid var(--info);
+        }
+
+        .import-instructions h3 {
+            color: var(--info);
+            margin-bottom: 1rem;
+        }
+
+        .import-instructions ol {
+            padding-left: 1.5rem;
+        }
+
+        .import-instructions li {
+            margin: 0.5rem 0;
+        }
+
+        #emailInput {
+            width: 100%;
+            min-height: 300px;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            resize: vertical;
+        }
+
+        #emailInput:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(255,107,53,0.3);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #1a1a1a;
+        }
+
+        .btn-success:hover {
+            background: #6dd889;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        /* Parsed Data Preview */
+        #parsedDataPreview {
+            margin-top: 2rem;
+            background: var(--bg-tertiary);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 2px solid var(--success);
+        }
+
+        .header-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        .header-section label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+
+        .header-section input,
+        .header-section select {
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .header-section input:focus,
+        .header-section select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Machines Table */
+        .machines-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .machines-table thead {
+            background: var(--accent);
+            color: white;
+        }
+
+        .machines-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .machines-table td {
+            padding: 0.75rem 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .machines-table tbody tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .machines-table input {
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            width: 100%;
+        }
+
+        .machines-table input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .machines-table input[type="number"] {
+            width: 100px;
+        }
+
+        .waste-inputs {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .waste-inputs input {
+            width: 70px !important;
+        }
+
+        .waste-inputs span {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Notes Section */
+        .notes-section {
+            margin: 1.5rem 0;
+        }
+
+        .notes-section label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .notes-section textarea {
+            width: 100%;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .notes-section textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+        }
+
+        /* Calendar Table */
+        .calendar-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 1.5rem 0;
+        }
+
+        .calendar-table thead {
+            background: var(--bg-tertiary);
+        }
+
+        .calendar-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .calendar-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .calendar-table tbody tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .calendar-table .weekend {
+            background: rgba(255,107,53,0.1);
+        }
+
+        .calendar-table .today {
+            background: rgba(255,107,53,0.2);
+            font-weight: bold;
+        }
+
+        /* Brigade Colors */
+        .brigade-michalak {
+            border-left: 4px solid var(--brigade-michalak);
+        }
+
+        .brigade-gajda {
+            border-left: 4px solid var(--brigade-gajda);
+        }
+
+        .brigade-wronka {
+            border-left: 4px solid var(--brigade-wronka);
+        }
+
+        .brigade-smandzik {
+            border-left: 4px solid var(--brigade-smandzik);
+        }
+
+        /* Month Selector */
+        .month-selector {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        .month-selector button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .month-selector button:hover {
+            background: var(--accent-hover);
+        }
+
+        .month-selector h2 {
+            font-size: 1.5rem;
+        }
+
+        /* Submenu for Machines */
+        .submenu {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem 2rem;
+            background: var(--bg-tertiary);
+            overflow-x: auto;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .submenu-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+
+        .submenu-item:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .submenu-item.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.2rem;
+            }
+
+            .nav-tabs {
+                padding: 0.5rem 1rem;
+            }
+
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-section {
+                grid-template-columns: 1fr;
+            }
+
+            .machines-table {
+                font-size: 0.85rem;
+            }
+
+            .machines-table input {
+                font-size: 0.85rem;
+            }
+        }
+
+        /* Loading Indicator */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>🏭 Flexo PRO Enterprise</h1>
+        <div class="header-controls">
+            <button class="theme-toggle" onclick="app.toggleTheme()" title="Przełącz motyw">🌓</button>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="app.showView('dashboard')">📊 Dashboard</button>
+        <button class="nav-tab" onclick="app.showView('import')">📝 Import Danych</button>
+        <button class="nav-tab" onclick="app.showView('report')">📈 Raport Produkcji</button>
+        <button class="nav-tab" onclick="app.showView('machines')">🏭 Maszyny</button>
+        <button class="nav-tab" onclick="app.showView('suma')">📦 Suma</button>
+        <button class="nav-tab" onclick="app.showView('analytics')">🔍 Analityka</button>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view active">
+            <h2>Dashboard - Podsumowanie Produkcji</h2>
+            <div class="kpi-grid" id="dashboard-kpi"></div>
+        </div>
+
+        <!-- Import View -->
+        <div id="import-view" class="view">
+            <div class="import-container">
+                <h2>📝 Import Danych z Emaila</h2>
+
+                <div class="import-instructions">
+                    <h3>📋 Instrukcja:</h3>
+                    <ol>
+                        <li>Skopiuj cały email od brygadzisty (Ctrl+C)</li>
+                        <li>Wklej poniżej w pole tekstowe (Ctrl+V)</li>
+                        <li>Kliknij przycisk "🔍 Parsuj dane"</li>
+                        <li>Sprawdź automatycznie wypełnione pola</li>
+                        <li>Popraw wartości jeśli to konieczne</li>
+                        <li>Kliknij "✅ Zatwierdź i zapisz"</li>
+                    </ol>
+                </div>
+
+                <textarea
+                    id="emailInput"
+                    placeholder="Wklej tutaj email od brygadzisty...&#10;&#10;Przykład:&#10;Data: 20.11.2025&#10;Zmiana: 1&#10;Brygada: MICHALAK&#10;Ilość pracowników: 17&#10;&#10;M1: Zadrukowano: 1245, Pobrano: 875, Zlecenia: 2, Klient: valsemolen&#10;..."
+                ></textarea>
+
+                <button onclick="app.parseEmail()" class="btn btn-primary">
+                    🔍 Parsuj dane
+                </button>
+
+                <div id="parsedDataPreview" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Report View -->
+        <div id="report-view" class="view">
+            <h2>📈 Raport Produkcji</h2>
+            <div class="month-selector">
+                <button onclick="app.changeReportMonth(-1)">◀</button>
+                <h2 id="report-month-label"></h2>
+                <button onclick="app.changeReportMonth(1)">▶</button>
+            </div>
+            <div id="report-content"></div>
+        </div>
+
+        <!-- Machines View -->
+        <div id="machines-view" class="view">
+            <h2>🏭 Maszyny - Kalendarz Produkcji</h2>
+            <div class="submenu" id="machines-submenu"></div>
+            <div id="machine-content"></div>
+        </div>
+
+        <!-- Suma View -->
+        <div id="suma-view" class="view">
+            <h2>📦 Suma - Wszystkie Maszyny</h2>
+            <div class="month-selector">
+                <button onclick="app.changeSumaMonth(-1)">◀</button>
+                <h2 id="suma-month-label"></h2>
+                <button onclick="app.changeSumaMonth(1)">▶</button>
+            </div>
+            <div id="suma-content"></div>
+        </div>
+
+        <!-- Analytics View -->
+        <div id="analytics-view" class="view">
+            <h2>🔍 Analityka</h2>
+            <div id="analytics-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const CONFIG = {
+            machines: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'SOMA 1', 'SOMA 2', 'SOMA 3', 'NOVOFLEX 1'],
+
+            brigades: {
+                'MICHALAK': {
+                    startDate: '2025-01-04',
+                    color: '#7bed9f',
+                    referenceWorker: 'Kamil'
+                },
+                'GAJDA': {
+                    startDate: '2025-01-16',
+                    color: '#ffa502',
+                    referenceWorker: 'Igor'
+                },
+                'WRONKA': {
+                    startDate: '2025-01-08',
+                    color: '#ff6348',
+                    referenceWorker: 'Wowa'
+                },
+                'SMANDZIK': {
+                    startDate: '2025-01-12',
+                    color: '#70a1ff',
+                    referenceWorker: 'Jarek'
+                }
+            },
+
+            // Cykl zmianowy (16 dni): 0=wolne, 1=rano, 2=popołudnie, 3=noc
+            shiftCycle: [1,1,1,1,0,3,3,3,3,0,0,2,2,2,2,0],
+
+            wasteTypes: ['bialy', 'folia', 'szary'],
+
+            firebaseConfig: {
+                apiKey: "AIzaSyBPTLyd2I85EU3Lzz9qEbgyyLvsRqAX0qM",
+                databaseURL: "https://produkcja-soma3-default-rtdb.europe-west1.firebasedatabase.app",
+                projectId: "produkcja-soma3"
+            }
+        };
+
+        // ============================================
+        // EMAIL PARSER CLASS
+        // ============================================
+        class EmailParser {
+            constructor() {
+                this.patterns = {
+                    date: /(\d{2}\.\d{2}\.\d{4})/,
+                    shift: /Zmiana[:\s]*(\d)/i,
+                    brigade: /Brygada[:\s]*(\w+)/i,
+                    workers: /Ilość\s+pracowników[:\s]*(\d+)/i
+                };
+            }
+
+            parse(text) {
+                console.log('Parsowanie rozpoczęte...');
+
+                const header = this.parseHeader(text);
+                const machines = this.parseMachines(text);
+                const waste = this.parseWaste(text);
+                const notes = this.parseNotes(text);
+
+                const result = { ...header, machines, waste, notes };
+                console.log('Sparsowane dane:', result);
+
+                return result;
+            }
+
+            parseHeader(text) {
+                const dateMatch = text.match(this.patterns.date);
+                const shiftMatch = text.match(this.patterns.shift);
+                const brigadeMatch = text.match(this.patterns.brigade);
+                const workersMatch = text.match(this.patterns.workers);
+
+                return {
+                    date: dateMatch ? this.formatDate(dateMatch[1]) : '',
+                    shift: shiftMatch ? parseInt(shiftMatch[1]) : 1,
+                    brigade: brigadeMatch ? brigadeMatch[1].toUpperCase() : '',
+                    workers: workersMatch ? parseInt(workersMatch[1]) : 0
+                };
+            }
+
+            formatDate(dateStr) {
+                // Konwertuje DD.MM.YYYY na YYYY-MM-DD
+                const parts = dateStr.split('.');
+                if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                }
+                return dateStr;
+            }
+
+            parseMachines(text) {
+                const machines = {};
+
+                CONFIG.machines.forEach(machineName => {
+                    const machineData = this.parseMachineData(text, machineName);
+                    if (machineData) {
+                        machines[machineName] = machineData;
+                    }
+                });
+
+                return machines;
+            }
+
+            parseMachineData(text, machineName) {
+                // Escape special characters for regex
+                const escapedName = machineName.replace(/[()]/g, '\\$&');
+
+                // Szukamy sekcji dla danej maszyny
+                // Wzorzec: Nazwa_Maszyny ... Zadrukowano:liczba ... Pobrano:liczba ... Zlecenia:liczba ... Klient:tekst
+                const pattern = new RegExp(
+                    `${escapedName}[^M]*?` +
+                    `Zadrukowano[:\\s]*(\\d+)[^M]*?` +
+                    `Pobrano[:\\s]*(\\d+)[^M]*?` +
+                    `(?:Zlecenia|Ilość\\s+zleceń)[:\\s]*(\\d+)[^M]*?` +
+                    `Klient[:\\s]*([\\w\\s&+]+?)(?=M\\d|SOMA|NOVOFLEX|Odpad|Adnotacje|Nieobecności|$)`,
+                    'is'
+                );
+
+                const match = text.match(pattern);
+
+                if (match) {
+                    return {
+                        zadrukowano: parseInt(match[1]) || 0,
+                        pobrano: parseInt(match[2]) || 0,
+                        zlecenia: parseInt(match[3]) || 0,
+                        klient: match[4] ? match[4].trim() : ''
+                    };
+                }
+
+                // Próba prostszego parsowania - tylko liczby
+                const simplePattern = new RegExp(
+                    `${escapedName}[^\\d]*(\\d+)[^\\d]+(\\d+)[^\\d]+(\\d+)`,
+                    'i'
+                );
+
+                const simpleMatch = text.match(simplePattern);
+                if (simpleMatch) {
+                    return {
+                        zadrukowano: parseInt(simpleMatch[1]) || 0,
+                        pobrano: parseInt(simpleMatch[2]) || 0,
+                        zlecenia: parseInt(simpleMatch[3]) || 0,
+                        klient: ''
+                    };
+                }
+
+                return null;
+            }
+
+            parseWaste(text) {
+                const waste = {};
+
+                // Szukamy sekcji z odpadami
+                const wasteSections = {
+                    bialy: /Odpad\s+papier\s+biały[:\s]*(.*?)(?=Odpad|Adnotacje|Nieobecności|$)/is,
+                    folia: /Odpad\s+papier\s+PE\/folia[:\s]*(.*?)(?=Odpad|Adnotacje|Nieobecności|$)/is,
+                    szary: /Odpad\s+opakowanie\s+szare[:\s]*(.*?)(?=Adnotacje|Nieobecności|$)/is
+                };
+
+                CONFIG.machines.forEach(machine => {
+                    waste[machine] = { bialy: 0, folia: 0, szary: 0 };
+
+                    Object.keys(wasteSections).forEach(wasteType => {
+                        const sectionMatch = text.match(wasteSections[wasteType]);
+                        if (sectionMatch) {
+                            const value = this.extractWasteValue(sectionMatch[1], machine);
+                            waste[machine][wasteType] = value;
+                        }
+                    });
+                });
+
+                return waste;
+            }
+
+            extractWasteValue(section, machine) {
+                const escapedMachine = machine.replace(/[()]/g, '\\$&');
+                const pattern = new RegExp(`${escapedMachine}[=:\\s]*(\\d+)`, 'i');
+                const match = section.match(pattern);
+                return match ? parseInt(match[1]) : 0;
+            }
+
+            parseNotes(text) {
+                // Wyciągamy sekcję adnotacji
+                const notesMatch = text.match(/Adnotacje[^:]*:(.*?)(?=Nieobecności|$)/is);
+                if (notesMatch) {
+                    return notesMatch[1].trim();
+                }
+                return '';
+            }
+        }
+
+        // ============================================
+        // PRODUCTION STORAGE CLASS
+        // ============================================
+        class ProductionStorage {
+            constructor() {
+                this.storageKey = 'flexo-enterprise-data';
+            }
+
+            generateKey(data) {
+                return `${data.date}-${data.shift}-${data.brigade}`;
+            }
+
+            save(data) {
+                const key = this.generateKey(data);
+                const allData = this.getAll();
+                allData[key] = {
+                    ...data,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem(this.storageKey, JSON.stringify(allData));
+                console.log('Zapisano dane:', key);
+                return key;
+            }
+
+            getAll() {
+                try {
+                    return JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+                } catch (e) {
+                    console.error('Błąd odczytu danych:', e);
+                    return {};
+                }
+            }
+
+            getByDate(date) {
+                const allData = this.getAll();
+                return Object.entries(allData)
+                    .filter(([key]) => key.startsWith(date))
+                    .map(([key, value]) => ({ key, ...value }));
+            }
+
+            getByMachine(machine, year, month) {
+                const allData = this.getAll();
+                const results = [];
+
+                Object.entries(allData).forEach(([key, value]) => {
+                    const [date] = key.split('-');
+                    const [y, m] = date.split('-');
+
+                    if ((!year || y === year.toString()) && (!month || m === month.toString().padStart(2, '0'))) {
+                        if (value.machines && value.machines[machine]) {
+                            results.push({
+                                date,
+                                shift: value.shift,
+                                brigade: value.brigade,
+                                data: value.machines[machine]
+                            });
+                        }
+                    }
+                });
+
+                return results;
+            }
+
+            getMonthSummary(year, month) {
+                const allData = this.getAll();
+                const summary = {
+                    totalZadrukowano: 0,
+                    totalPobrano: 0,
+                    totalZlecenia: 0,
+                    totalWaste: { bialy: 0, folia: 0, szary: 0 },
+                    byMachine: {},
+                    byBrigade: {},
+                    entries: 0
+                };
+
+                CONFIG.machines.forEach(machine => {
+                    summary.byMachine[machine] = {
+                        zadrukowano: 0,
+                        pobrano: 0,
+                        zlecenia: 0
+                    };
+                });
+
+                Object.entries(allData).forEach(([key, value]) => {
+                    const [date] = key.split('-');
+                    const [y, m] = date.split('-');
+
+                    if (y === year.toString() && m === month.toString().padStart(2, '0')) {
+                        summary.entries++;
+
+                        // Suma dla maszyn
+                        if (value.machines) {
+                            Object.entries(value.machines).forEach(([machine, data]) => {
+                                summary.totalZadrukowano += data.zadrukowano || 0;
+                                summary.totalPobrano += data.pobrano || 0;
+                                summary.totalZlecenia += data.zlecenia || 0;
+
+                                if (summary.byMachine[machine]) {
+                                    summary.byMachine[machine].zadrukowano += data.zadrukowano || 0;
+                                    summary.byMachine[machine].pobrano += data.pobrano || 0;
+                                    summary.byMachine[machine].zlecenia += data.zlecenia || 0;
+                                }
+                            });
+                        }
+
+                        // Suma odpadów
+                        if (value.waste) {
+                            Object.values(value.waste).forEach(machineWaste => {
+                                summary.totalWaste.bialy += machineWaste.bialy || 0;
+                                summary.totalWaste.folia += machineWaste.folia || 0;
+                                summary.totalWaste.szary += machineWaste.szary || 0;
+                            });
+                        }
+
+                        // Suma dla brygad
+                        if (!summary.byBrigade[value.brigade]) {
+                            summary.byBrigade[value.brigade] = {
+                                zadrukowano: 0,
+                                entries: 0
+                            };
+                        }
+
+                        if (value.machines) {
+                            Object.values(value.machines).forEach(data => {
+                                summary.byBrigade[value.brigade].zadrukowano += data.zadrukowano || 0;
+                            });
+                        }
+                        summary.byBrigade[value.brigade].entries++;
+                    }
+                });
+
+                return summary;
+            }
+
+            delete(key) {
+                const allData = this.getAll();
+                delete allData[key];
+                localStorage.setItem(this.storageKey, JSON.stringify(allData));
+            }
+
+            clear() {
+                if (confirm('Czy na pewno chcesz usunąć WSZYSTKIE dane? Ta operacja jest nieodwracalna!')) {
+                    localStorage.removeItem(this.storageKey);
+                    console.log('Wyczyszczono wszystkie dane');
+                }
+            }
+        }
+
+        // ============================================
+        // SHIFT CALCULATOR
+        // ============================================
+        class ShiftCalculator {
+            getShift(brigade, dateStr) {
+                if (!CONFIG.brigades[brigade]) {
+                    return 0;
+                }
+
+                const startDate = new Date(CONFIG.brigades[brigade].startDate + 'T00:00:00');
+                const targetDate = new Date(dateStr + 'T00:00:00');
+
+                const diffTime = targetDate - startDate;
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+                const cyclePosition = ((diffDays % 16) + 16) % 16;
+
+                return CONFIG.shiftCycle[cyclePosition];
+            }
+
+            getShiftIcon(shift) {
+                switch(shift) {
+                    case 1: return '☀️';
+                    case 2: return '🌆';
+                    case 3: return '🌙';
+                    default: return '🏠';
+                }
+            }
+
+            getShiftName(shift) {
+                switch(shift) {
+                    case 1: return 'Rano';
+                    case 2: return 'Popołudnie';
+                    case 3: return 'Noc';
+                    default: return 'Wolne';
+                }
+            }
+        }
+
+        // ============================================
+        // MAIN APPLICATION CLASS
+        // ============================================
+        class FlexoEnterpriseApp {
+            constructor() {
+                this.parser = new EmailParser();
+                this.storage = new ProductionStorage();
+                this.shiftCalc = new ShiftCalculator();
+
+                this.currentView = 'dashboard';
+                this.currentMachine = 'M1';
+                this.currentReportMonth = { year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
+                this.currentSumaMonth = { year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
+
+                this.tempParsedData = null;
+
+                this.init();
+            }
+
+            init() {
+                console.log('Flexo PRO Enterprise - Inicjalizacja...');
+
+                // Załaduj motyw
+                const savedTheme = localStorage.getItem('theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+
+                // Renderuj początkowy widok
+                this.renderDashboard();
+                this.renderMachinesSubmenu();
+
+                console.log('Aplikacja gotowa!');
+            }
+
+            // ============================================
+            // VIEW MANAGEMENT
+            // ============================================
+            showView(viewName) {
+                // Ukryj wszystkie widoki
+                document.querySelectorAll('.view').forEach(view => {
+                    view.classList.remove('active');
+                });
+
+                // Usuń active z tabów
+                document.querySelectorAll('.nav-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+
+                // Pokaż wybrany widok
+                const view = document.getElementById(`${viewName}-view`);
+                if (view) {
+                    view.classList.add('active');
+                }
+
+                // Aktywuj tab
+                event.target.classList.add('active');
+
+                this.currentView = viewName;
+
+                // Renderuj zawartość dla wybranego widoku
+                switch(viewName) {
+                    case 'dashboard':
+                        this.renderDashboard();
+                        break;
+                    case 'report':
+                        this.renderReport();
+                        break;
+                    case 'machines':
+                        this.renderMachine(this.currentMachine);
+                        break;
+                    case 'suma':
+                        this.renderSuma();
+                        break;
+                    case 'analytics':
+                        this.renderAnalytics();
+                        break;
+                }
+            }
+
+            toggleTheme() {
+                const currentTheme = document.documentElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+            }
+
+            // ============================================
+            // DASHBOARD
+            // ============================================
+            renderDashboard() {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = today.getMonth() + 1;
+
+                const summary = this.storage.getMonthSummary(year, month);
+
+                const kpiData = [
+                    {
+                        title: 'Zadrukowano (miesiąc)',
+                        value: this.formatNumber(summary.totalZadrukowano) + ' kg',
+                        subtext: `${summary.entries} wpisów w tym miesiącu`
+                    },
+                    {
+                        title: 'Pobrano (miesiąc)',
+                        value: this.formatNumber(summary.totalPobrano) + ' kg',
+                        subtext: 'Surowiec wykorzystany'
+                    },
+                    {
+                        title: 'Ilość zleceń',
+                        value: summary.totalZlecenia,
+                        subtext: 'Zleceń wykonanych'
+                    },
+                    {
+                        title: 'Odpady razem',
+                        value: this.formatNumber(summary.totalWaste.bialy + summary.totalWaste.folia + summary.totalWaste.szary) + ' kg',
+                        subtext: `Biały: ${summary.totalWaste.bialy} | Folia: ${summary.totalWaste.folia} | Szary: ${summary.totalWaste.szary}`
+                    }
+                ];
+
+                let html = '';
+                kpiData.forEach(kpi => {
+                    html += `
+                        <div class="kpi-card">
+                            <h3>${kpi.title}</h3>
+                            <div class="value">${kpi.value}</div>
+                            <div class="subtext">${kpi.subtext}</div>
+                        </div>
+                    `;
+                });
+
+                // Top maszyny
+                const topMachines = Object.entries(summary.byMachine)
+                    .sort((a, b) => b[1].zadrukowano - a[1].zadrukowano)
+                    .slice(0, 3);
+
+                html += `
+                    <div class="kpi-card" style="grid-column: 1 / -1;">
+                        <h3>🏆 Top 3 Maszyny (${this.getMonthName(month)} ${year})</h3>
+                        <div style="margin-top: 1rem;">
+                `;
+
+                topMachines.forEach((([machine, data], index) => {
+                    const medal = ['🥇', '🥈', '🥉'][index];
+                    html += `
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-tertiary); margin: 0.5rem 0; border-radius: 6px;">
+                            <span>${medal} <strong>${machine}</strong></span>
+                            <span>${this.formatNumber(data.zadrukowano)} kg</span>
+                        </div>
+                    `;
+                }));
+
+                html += `
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('dashboard-kpi').innerHTML = html;
+            }
+
+            // ============================================
+            // EMAIL IMPORT
+            // ============================================
+            parseEmail() {
+                const input = document.getElementById('emailInput').value;
+
+                if (!input.trim()) {
+                    alert('Pole jest puste! Wklej email od brygadzisty.');
+                    return;
+                }
+
+                try {
+                    this.tempParsedData = this.parser.parse(input);
+                    this.showParsedData(this.tempParsedData);
+                } catch (error) {
+                    console.error('Błąd parsowania:', error);
+                    alert('Błąd parsowania danych: ' + error.message);
+                }
+            }
+
+            showParsedData(data) {
+                const preview = document.getElementById('parsedDataPreview');
+
+                let html = `
+                    <h3>✅ Sprawdź dane przed zapisem:</h3>
+
+                    <div class="header-section">
+                        <label>
+                            Data:
+                            <input type="date" id="edit-date" value="${data.date}">
+                        </label>
+                        <label>
+                            Zmiana:
+                            <select id="edit-shift">
+                                <option value="1" ${data.shift === 1 ? 'selected' : ''}>1 - Rano ☀️</option>
+                                <option value="2" ${data.shift === 2 ? 'selected' : ''}>2 - Popołudnie 🌆</option>
+                                <option value="3" ${data.shift === 3 ? 'selected' : ''}>3 - Noc 🌙</option>
+                            </select>
+                        </label>
+                        <label>
+                            Brygada:
+                            <select id="edit-brigade">
+                                ${Object.keys(CONFIG.brigades).map(b =>
+                                    `<option value="${b}" ${data.brigade === b ? 'selected' : ''}>${b}</option>`
+                                ).join('')}
+                            </select>
+                        </label>
+                        <label>
+                            Ilość pracowników:
+                            <input type="number" id="edit-workers" value="${data.workers}" min="0">
+                        </label>
+                    </div>
+
+                    <table class="machines-table">
+                        <thead>
+                            <tr>
+                                <th>Maszyna</th>
+                                <th>Zadrukowano (kg)</th>
+                                <th>Pobrano (kg)</th>
+                                <th>Zlecenia</th>
+                                <th>Klient</th>
+                                <th>Odpady (kg)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                CONFIG.machines.forEach(machine => {
+                    const machineData = data.machines[machine] || { zadrukowano: '', pobrano: '', zlecenia: '', klient: '' };
+                    const waste = data.waste[machine] || { bialy: 0, folia: 0, szary: 0 };
+
+                    html += `
+                        <tr>
+                            <td><strong>${machine}</strong></td>
+                            <td>
+                                <input type="number"
+                                    class="edit-machine-field"
+                                    data-machine="${machine}"
+                                    data-field="zadrukowano"
+                                    value="${machineData.zadrukowano || ''}"
+                                    placeholder="0">
+                            </td>
+                            <td>
+                                <input type="number"
+                                    class="edit-machine-field"
+                                    data-machine="${machine}"
+                                    data-field="pobrano"
+                                    value="${machineData.pobrano || ''}"
+                                    placeholder="0">
+                            </td>
+                            <td>
+                                <input type="number"
+                                    class="edit-machine-field"
+                                    data-machine="${machine}"
+                                    data-field="zlecenia"
+                                    value="${machineData.zlecenia || ''}"
+                                    placeholder="0">
+                            </td>
+                            <td>
+                                <input type="text"
+                                    class="edit-machine-field"
+                                    data-machine="${machine}"
+                                    data-field="klient"
+                                    value="${machineData.klient || ''}"
+                                    placeholder="Nazwa klienta">
+                            </td>
+                            <td>
+                                <div class="waste-inputs">
+                                    <span>B:</span>
+                                    <input type="number"
+                                        class="edit-waste-field"
+                                        data-machine="${machine}"
+                                        data-type="bialy"
+                                        value="${waste.bialy || 0}">
+                                    <span>F:</span>
+                                    <input type="number"
+                                        class="edit-waste-field"
+                                        data-machine="${machine}"
+                                        data-type="folia"
+                                        value="${waste.folia || 0}">
+                                    <span>S:</span>
+                                    <input type="number"
+                                        class="edit-waste-field"
+                                        data-machine="${machine}"
+                                        data-type="szary"
+                                        value="${waste.szary || 0}">
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+
+                    <div class="notes-section">
+                        <label>
+                            Adnotacje (awarie, problemy, uwagi):
+                            <textarea id="edit-notes" rows="4">${data.notes || ''}</textarea>
+                        </label>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button onclick="app.cancelImport()" class="btn btn-secondary">
+                            ❌ Anuluj
+                        </button>
+                        <button onclick="app.saveImportedData()" class="btn btn-success">
+                            ✅ Zatwierdź i zapisz
+                        </button>
+                    </div>
+                `;
+
+                preview.innerHTML = html;
+                preview.style.display = 'block';
+
+                // Scroll do preview
+                preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            saveImportedData() {
+                // Zbierz dane z formularza
+                const data = {
+                    date: document.getElementById('edit-date').value,
+                    shift: parseInt(document.getElementById('edit-shift').value),
+                    brigade: document.getElementById('edit-brigade').value,
+                    workers: parseInt(document.getElementById('edit-workers').value),
+                    machines: {},
+                    waste: {},
+                    notes: document.getElementById('edit-notes').value
+                };
+
+                // Zbierz dane maszyn
+                CONFIG.machines.forEach(machine => {
+                    const zadrukowano = document.querySelector(`input[data-machine="${machine}"][data-field="zadrukowano"]`).value;
+                    const pobrano = document.querySelector(`input[data-machine="${machine}"][data-field="pobrano"]`).value;
+                    const zlecenia = document.querySelector(`input[data-machine="${machine}"][data-field="zlecenia"]`).value;
+                    const klient = document.querySelector(`input[data-machine="${machine}"][data-field="klient"]`).value;
+
+                    if (zadrukowano || pobrano || zlecenia || klient) {
+                        data.machines[machine] = {
+                            zadrukowano: parseInt(zadrukowano) || 0,
+                            pobrano: parseInt(pobrano) || 0,
+                            zlecenia: parseInt(zlecenia) || 0,
+                            klient: klient.trim()
+                        };
+                    }
+
+                    // Odpady
+                    data.waste[machine] = {
+                        bialy: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="bialy"]`).value) || 0,
+                        folia: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="folia"]`).value) || 0,
+                        szary: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="szary"]`).value) || 0
+                    };
+                });
+
+                // Walidacja
+                if (!data.date || !data.brigade) {
+                    alert('Wypełnij wymagane pola: Data i Brygada!');
+                    return;
+                }
+
+                // Zapisz
+                try {
+                    const key = this.storage.save(data);
+                    alert(`✅ Dane zapisane pomyślnie!\n\nKlucz: ${key}\nData: ${data.date}\nZmiana: ${data.shift}\nBrygada: ${data.brigade}`);
+
+                    // Wyczyść formularz
+                    document.getElementById('emailInput').value = '';
+                    document.getElementById('parsedDataPreview').style.display = 'none';
+                    this.tempParsedData = null;
+
+                    // Odśwież dashboard
+                    if (this.currentView === 'dashboard') {
+                        this.renderDashboard();
+                    }
+                } catch (error) {
+                    console.error('Błąd zapisu:', error);
+                    alert('Błąd podczas zapisywania danych: ' + error.message);
+                }
+            }
+
+            cancelImport() {
+                if (confirm('Czy na pewno chcesz anulować? Sparsowane dane zostaną utracone.')) {
+                    document.getElementById('parsedDataPreview').style.display = 'none';
+                    this.tempParsedData = null;
+                }
+            }
+
+            // ============================================
+            // REPORT VIEW
+            // ============================================
+            renderReport() {
+                const { year, month } = this.currentReportMonth;
+
+                document.getElementById('report-month-label').textContent =
+                    `${this.getMonthName(month)} ${year}`;
+
+                const allData = this.storage.getAll();
+                const monthData = [];
+
+                Object.entries(allData).forEach(([key, value]) => {
+                    const [date] = key.split('-');
+                    const [y, m] = date.split('-');
+
+                    if (y === year.toString() && m === month.toString().padStart(2, '0')) {
+                        monthData.push({ key, date, ...value });
+                    }
+                });
+
+                // Sortuj po dacie
+                monthData.sort((a, b) => a.date.localeCompare(b.date));
+
+                let html = `
+                    <table class="calendar-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Zmiana</th>
+                                <th>Brygada</th>
+                                <th>Pracownicy</th>
+                                ${CONFIG.machines.map(m => `<th>${m}</th>`).join('')}
+                                <th>SUMA</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                if (monthData.length === 0) {
+                    html += `
+                        <tr>
+                            <td colspan="${CONFIG.machines.length + 6}" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                Brak danych dla tego miesiąca
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    monthData.forEach(entry => {
+                        const brigadeClass = `brigade-${entry.brigade.toLowerCase()}`;
+                        let suma = 0;
+
+                        html += `
+                            <tr class="${brigadeClass}">
+                                <td><strong>${entry.date}</strong></td>
+                                <td>${this.shiftCalc.getShiftIcon(entry.shift)} ${entry.shift}</td>
+                                <td>${entry.brigade}</td>
+                                <td>${entry.workers}</td>
+                        `;
+
+                        CONFIG.machines.forEach(machine => {
+                            const value = entry.machines[machine]?.zadrukowano || 0;
+                            suma += value;
+                            html += `<td>${value > 0 ? this.formatNumber(value) : '-'}</td>`;
+                        });
+
+                        html += `
+                                <td><strong>${this.formatNumber(suma)}</strong></td>
+                                <td>
+                                    <button onclick="app.viewDetails('${entry.key}')" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">
+                                        👁️ Szczegóły
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                html += `
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('report-content').innerHTML = html;
+            }
+
+            changeReportMonth(delta) {
+                this.currentReportMonth.month += delta;
+
+                if (this.currentReportMonth.month > 12) {
+                    this.currentReportMonth.month = 1;
+                    this.currentReportMonth.year++;
+                } else if (this.currentReportMonth.month < 1) {
+                    this.currentReportMonth.month = 12;
+                    this.currentReportMonth.year--;
+                }
+
+                this.renderReport();
+            }
+
+            viewDetails(key) {
+                const allData = this.storage.getAll();
+                const entry = allData[key];
+
+                if (!entry) {
+                    alert('Nie znaleziono danych!');
+                    return;
+                }
+
+                let details = `SZCZEGÓŁY WPISU\n\n`;
+                details += `Data: ${entry.date}\n`;
+                details += `Zmiana: ${entry.shift} ${this.shiftCalc.getShiftIcon(entry.shift)}\n`;
+                details += `Brygada: ${entry.brigade}\n`;
+                details += `Pracownicy: ${entry.workers}\n\n`;
+
+                details += `MASZYNY:\n`;
+                CONFIG.machines.forEach(machine => {
+                    if (entry.machines[machine]) {
+                        const m = entry.machines[machine];
+                        details += `\n${machine}:\n`;
+                        details += `  Zadrukowano: ${m.zadrukowano} kg\n`;
+                        details += `  Pobrano: ${m.pobrano} kg\n`;
+                        details += `  Zlecenia: ${m.zlecenia}\n`;
+                        details += `  Klient: ${m.klient}\n`;
+
+                        if (entry.waste[machine]) {
+                            const w = entry.waste[machine];
+                            details += `  Odpady: B:${w.bialy} F:${w.folia} S:${w.szary}\n`;
+                        }
+                    }
+                });
+
+                if (entry.notes) {
+                    details += `\nADNOTACJE:\n${entry.notes}\n`;
+                }
+
+                alert(details);
+            }
+
+            // ============================================
+            // MACHINES VIEW
+            // ============================================
+            renderMachinesSubmenu() {
+                const submenu = document.getElementById('machines-submenu');
+                let html = '';
+
+                CONFIG.machines.forEach(machine => {
+                    const active = machine === this.currentMachine ? 'active' : '';
+                    html += `
+                        <button class="submenu-item ${active}" onclick="app.selectMachine('${machine}')">
+                            ${machine}
+                        </button>
+                    `;
+                });
+
+                submenu.innerHTML = html;
+            }
+
+            selectMachine(machine) {
+                this.currentMachine = machine;
+                this.renderMachinesSubmenu();
+                this.renderMachine(machine);
+            }
+
+            renderMachine(machine) {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = today.getMonth() + 1;
+
+                const data = this.storage.getByMachine(machine, year, month);
+
+                let html = `
+                    <div class="month-selector">
+                        <button>◀</button>
+                        <h2>${machine} - ${this.getMonthName(month)} ${year}</h2>
+                        <button>▶</button>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="label">Suma zadrukowano</div>
+                            <div class="value">${this.formatNumber(data.reduce((sum, d) => sum + (d.data.zadrukowano || 0), 0))} kg</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">Dni pracy</div>
+                            <div class="value">${data.length}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">Średnia dzienna</div>
+                            <div class="value">${data.length > 0 ? this.formatNumber(Math.round(data.reduce((sum, d) => sum + (d.data.zadrukowano || 0), 0) / data.length)) : 0} kg</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">Suma zleceń</div>
+                            <div class="value">${data.reduce((sum, d) => sum + (d.data.zlecenia || 0), 0)}</div>
+                        </div>
+                    </div>
+
+                    <table class="calendar-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Brygada</th>
+                                <th>Zmiana</th>
+                                <th>Zadrukowano (kg)</th>
+                                <th>Zlecenia</th>
+                                <th>Klient</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                if (data.length === 0) {
+                    html += `
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                Brak danych dla tej maszyny w tym miesiącu
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    data.sort((a, b) => a.date.localeCompare(b.date));
+
+                    data.forEach(entry => {
+                        const brigadeClass = `brigade-${entry.brigade.toLowerCase()}`;
+                        html += `
+                            <tr class="${brigadeClass}">
+                                <td><strong>${entry.date}</strong></td>
+                                <td>${entry.brigade}</td>
+                                <td>${this.shiftCalc.getShiftIcon(entry.shift)} ${entry.shift}</td>
+                                <td><strong>${this.formatNumber(entry.data.zadrukowano)}</strong></td>
+                                <td>${entry.data.zlecenia || 0}</td>
+                                <td>${entry.data.klient || '-'}</td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                html += `
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('machine-content').innerHTML = html;
+            }
+
+            // ============================================
+            // SUMA VIEW
+            // ============================================
+            renderSuma() {
+                const { year, month } = this.currentSumaMonth;
+
+                document.getElementById('suma-month-label').textContent =
+                    `${this.getMonthName(month)} ${year}`;
+
+                const summary = this.storage.getMonthSummary(year, month);
+
+                let html = `
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="label">SUMA Zadrukowano</div>
+                            <div class="value">${this.formatNumber(summary.totalZadrukowano)} kg</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">SUMA Pobrano</div>
+                            <div class="value">${this.formatNumber(summary.totalPobrano)} kg</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">SUMA Zleceń</div>
+                            <div class="value">${summary.totalZlecenia}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">Wpisów</div>
+                            <div class="value">${summary.entries}</div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin: 2rem 0 1rem 0;">Suma zadruku według maszyn</h3>
+                    <table class="calendar-table">
+                        <thead>
+                            <tr>
+                                <th>Maszyna</th>
+                                <th>Zadrukowano (kg)</th>
+                                <th>Pobrano (kg)</th>
+                                <th>Zlecenia</th>
+                                <th>% udziału</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                const sortedMachines = Object.entries(summary.byMachine)
+                    .sort((a, b) => b[1].zadrukowano - a[1].zadrukowano);
+
+                sortedMachines.forEach(([machine, data]) => {
+                    const percentage = summary.totalZadrukowano > 0
+                        ? ((data.zadrukowano / summary.totalZadrukowano) * 100).toFixed(1)
+                        : 0;
+
+                    html += `
+                        <tr>
+                            <td><strong>${machine}</strong></td>
+                            <td><strong>${this.formatNumber(data.zadrukowano)}</strong></td>
+                            <td>${this.formatNumber(data.pobrano)}</td>
+                            <td>${data.zlecenia}</td>
+                            <td>${percentage}%</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+
+                    <h3 style="margin: 2rem 0 1rem 0;">Suma według brygad</h3>
+                    <table class="calendar-table">
+                        <thead>
+                            <tr>
+                                <th>Brygada</th>
+                                <th>Zadrukowano (kg)</th>
+                                <th>Wpisów</th>
+                                <th>Średnia na wpis</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                const sortedBrigades = Object.entries(summary.byBrigade)
+                    .sort((a, b) => b[1].zadrukowano - a[1].zadrukowano);
+
+                sortedBrigades.forEach(([brigade, data]) => {
+                    const average = data.entries > 0 ? Math.round(data.zadrukowano / data.entries) : 0;
+                    const brigadeClass = `brigade-${brigade.toLowerCase()}`;
+
+                    html += `
+                        <tr class="${brigadeClass}">
+                            <td><strong>${brigade}</strong></td>
+                            <td><strong>${this.formatNumber(data.zadrukowano)}</strong></td>
+                            <td>${data.entries}</td>
+                            <td>${this.formatNumber(average)}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('suma-content').innerHTML = html;
+            }
+
+            changeSumaMonth(delta) {
+                this.currentSumaMonth.month += delta;
+
+                if (this.currentSumaMonth.month > 12) {
+                    this.currentSumaMonth.month = 1;
+                    this.currentSumaMonth.year++;
+                } else if (this.currentSumaMonth.month < 1) {
+                    this.currentSumaMonth.month = 12;
+                    this.currentSumaMonth.year--;
+                }
+
+                this.renderSuma();
+            }
+
+            // ============================================
+            // ANALYTICS VIEW
+            // ============================================
+            renderAnalytics() {
+                const html = `
+                    <div class="kpi-card">
+                        <h3>🚧 Analityka - W budowie</h3>
+                        <p style="margin-top: 1rem; color: var(--text-secondary);">
+                            Ta sekcja będzie zawierać zaawansowane wykresy i analizy:
+                        </p>
+                        <ul style="margin-top: 1rem; padding-left: 2rem; color: var(--text-secondary);">
+                            <li>Efektywność brygad</li>
+                            <li>Wykorzystanie maszyn</li>
+                            <li>Analiza odpadów</li>
+                            <li>Trendy produkcji</li>
+                            <li>Częstotliwość awarii</li>
+                        </ul>
+                    </div>
+                `;
+
+                document.getElementById('analytics-content').innerHTML = html;
+            }
+
+            // ============================================
+            // HELPER FUNCTIONS
+            // ============================================
+            formatNumber(num) {
+                if (typeof num !== 'number') num = parseFloat(num) || 0;
+                return num.toLocaleString('pl-PL');
+            }
+
+            getMonthName(month) {
+                const months = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+                               'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
+                return months[month - 1] || '';
+            }
+        }
+
+        // ============================================
+        // INITIALIZE APPLICATION
+        // ============================================
+        let app;
+        window.onload = () => {
+            app = new FlexoEnterpriseApp();
+            console.log('✅ Flexo PRO Enterprise gotowy do użycia!');
+        };
+    </script>
+</body>
+</html>
