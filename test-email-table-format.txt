@@ -1,0 +1,18 @@
+Data	Zmiana	Brygada	Ilość pracowników
+20.11.2025	1	MICHALAK	17
+
+M1	M2	M3	M4	M5	SOMA 1	M6 (STREFA)	SOMA 2 (STREFA)	NOVOFLEX 1 (STREFA)	Suma
+Zadrukowano	1245	1204	737	841	260		3647	3976	2166	14076
+Pobrano	875	1263	764	1227	388		3985	3616	2209	14327
+Ilość zleceń	2	2	1	3	3		2	1	2	16
+Klient	valsemolen	tienen	upm	upm	kdkw		prost key + p&l	malitas	sudzucker
+Odpad papier biały	139	77	38	145	130		59	50	106	744
+Odpad papier PE/folia							0
+Odpad opakowanie szare/ papier szary	6	6				16	27	18	73
+
+Adnotacje (awarie, przerwane wzory, uszkodzone klisze) PROSZĘ WPISYWAĆ NUMERY ZP	Przelaczanie zasilania
+M3 – Mycie sekcji x 5
+
+M3, M6 ponowne restary maszyn po przelaczeniu zasilania
+
+Soma 1 – przestawa na povazky, 2 x zryw papieru, Mycie sekcji x 2, Zbrojenie x 4	Nieobecności pracowników
