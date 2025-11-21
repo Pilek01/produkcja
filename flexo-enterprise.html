@@ -1632,7 +1632,9 @@
                     this.storage.save(finalData);
                     alert(`✅ Dane zapisane pomyślnie (Scalono)!\n\nKlucz: ${key}`);
 
-                    document.getElementById('emailInput').value = '';
+                    // Wyczyść oba inputy
+                    document.getElementById('emailInputMain').value = '';
+                    document.getElementById('emailInputZone3').value = '';
                     document.getElementById('parsedDataPreview').style.display = 'none';
                     this.tempParsedData = null;
 
@@ -2066,7 +2068,7 @@
 
     <!-- Footer with version -->
     <footer style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem;">
-        Flexo PRO Enterprise v0.0.29
+        Flexo PRO Enterprise v0.0.30
     </footer>
 </body>
 </html>
