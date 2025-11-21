@@ -1030,13 +1030,13 @@
                 const results = [];
 
                 Object.entries(allData).forEach(([key, value]) => {
-                    const [date] = key.split('-');
-                    const [y, m] = date.split('-');
+                    // Klucz format: YYYY-MM-DD-SHIFT-BRIGADE
+                    const [y, m, d] = key.split('-');
 
                     if ((!year || y === year.toString()) && (!month || m === month.toString().padStart(2, '0'))) {
                         if (value.machines && value.machines[machine]) {
                             results.push({
-                                date,
+                                date: `${y}-${m}-${d}`,
                                 shift: value.shift,
                                 brigade: value.brigade,
                                 data: value.machines[machine]
@@ -1069,8 +1069,8 @@
                 });
 
                 Object.entries(allData).forEach(([key, value]) => {
-                    const [date] = key.split('-');
-                    const [y, m] = date.split('-');
+                    // Klucz format: YYYY-MM-DD-SHIFT-BRIGADE
+                    const [y, m, d] = key.split('-');
 
                     if (y === year.toString() && m === month.toString().padStart(2, '0')) {
                         summary.entries++;
@@ -1665,8 +1665,8 @@
                 const monthData = [];
 
                 Object.entries(allData).forEach(([key, value]) => {
-                    const [date] = key.split('-');
-                    const [y, m] = date.split('-');
+                    // Klucz format: YYYY-MM-DD-SHIFT-BRIGADE
+                    const [y, m, d] = key.split('-');
 
                     if (y === year.toString() && m === month.toString().padStart(2, '0')) {
                         monthData.push({ key, date, ...value });
@@ -2068,7 +2068,7 @@
 
     <!-- Footer with version -->
     <footer style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem;">
-        Flexo PRO Enterprise v0.0.30
+        Flexo PRO Enterprise v0.0.31
     </footer>
 </body>
 </html>
