@@ -748,7 +748,7 @@
         };
 
         // ============================================
-        // EMAIL PARSER CLASS - v5.0 (ROBUST EXCEL MAPPING)
+        // EMAIL PARSER CLASS - v6.0 (WHITESPACE PRESERVATION)
         // ============================================
         class EmailParser {
             constructor() {
@@ -756,21 +756,19 @@
             }
 
             parse(text) {
-                console.log('🔍 === PARSER v5.0 (Robust) START ===');
+                console.log('🔍 === PARSER v6.0 (Whitespace Preservation) START ===');
 
-                // Normalizacja podziałów linii (usuwa puste znaki z końca linii, ale zachowuje strukturę)
-                const lines = text.split('\n').map(l => l.trimEnd());
+                // UWAGA: Nie używamy tutaj trimEnd() ani trim(), aby zachować tabulatory
+                // na końcach i początkach linii (kluczowe dla pustych komórek Excela)
+                const lines = text.split('\n');
 
-                // 1. Parsowanie nagłówka (Data, Zmiana, Brygada, Pracownicy)
                 const header = this.parseHeader(lines);
-
-                // 2. Parsowanie tabeli maszyn
                 const tableData = this.parseTableData(lines);
 
                 let machines = tableData.machines;
                 let waste = tableData.waste;
 
-                // Uzupełnij brakujące maszyny zerami jeśli parser ich nie znalazł
+                // Uzupełnianie braków
                 CONFIG.machines.forEach(m => {
                     if (!machines[m]) machines[m] = { zadrukowano: 0, pobrano: 0, zlecenia: 0, klient: '' };
                     if (!waste[m]) waste[m] = { bialy: 0, folia: 0, szary: 0 };
@@ -785,52 +783,52 @@
             parseHeader(lines) {
                 let date = '', shift = 1, brigade = '', workers = 0;
 
-                // Szukamy linii z datą (format DD.MM.YYYY)
-                // Zakładamy, że w tej samej linii są pozostałe dane nagłówkowe oddzielone TABAMI
-                for (let i = 0; i < 30; i++) { // Szukaj w pierwszych 30 liniach
+                // Szukamy linii z datą w pierwszych 30 liniach
+                for (let i = 0; i < 30; i++) {
                     if (!lines[i]) continue;
 
+                    // Szukamy daty w formacie DD.MM.YYYY
                     const dateMatch = lines[i].match(/(\d{2}\.\d{2}\.\d{4})/);
                     if (dateMatch) {
                         date = this.formatDate(dateMatch[1]);
-                        console.log('📅 Znaleziono linię danych nagłówka:', lines[i]);
 
-                        // Rozbij linię po tabulatorach
-                        // Oczekiwany format: [Data, Zmiana, Brygada, Ilość_pracowników, ...]
+                        // Rozbijamy linię DOKŁADNIE po tabulatorach
+                        // Struktura: [Data, Zmiana, Brygada, Pracownicy]
                         const parts = lines[i].split('\t').map(p => p.trim());
 
-                        // Część 1: Zmiana (zazwyczaj indeks 1)
-                        if (parts[1] && /^\d$/.test(parts[1])) {
+                        console.log('📅 Header row parts:', parts);
+
+                        // Zmiana (Indeks 1)
+                        if (parts.length > 1 && /^\d$/.test(parts[1])) {
                             shift = parseInt(parts[1]);
                         }
 
-                        // Część 2: Brygada (zazwyczaj indeks 2)
-                        if (parts[2]) {
+                        // Brygada (Indeks 2)
+                        if (parts.length > 2) {
                             const potentialBrigade = parts[2].toUpperCase();
                             if (this.knownBrigades.includes(potentialBrigade)) {
                                 brigade = potentialBrigade;
                             }
                         }
 
-                        // Część 3: Pracownicy (zazwyczaj indeks 3)
-                        // Szukamy pierwszej liczby > 3 w tej linii (żeby pominąć zmianę)
-                        for (let p of parts) {
-                            const val = parseInt(p);
-                            // Walidacja: 4-99 pracowników. Mniej niż 4 to pewnie Zmiana, >2000 to Rok lub produkcja.
+                        // Pracownicy (Indeks 3) - FIX: Bierzemy konkretnie 4 kolumnę
+                        if (parts.length > 3) {
+                            const val = parseInt(parts[3]);
+                            // Walidacja: 4-99 (żeby wykluczyć puste, zmiany 1-3, czy rok 2025)
                             if (!isNaN(val) && val > 3 && val < 100) {
                                 workers = val;
-                                break; // Bierzemy pierwszą pasującą
                             }
                         }
                         break;
                     }
                 }
 
-                // Fallback dla brygady, jeśli nie była w tabeli nagłówkowej
+                // Fallback dla brygady (jeśli nie w tabeli)
                 if (!brigade) {
                     for (let line of lines.slice(0, 20)) {
+                        const upper = line.toUpperCase();
                         for (let known of this.knownBrigades) {
-                            if (line.toUpperCase().includes(known)) {
+                            if (upper.includes(known)) {
                                 brigade = known;
                                 break;
                             }
@@ -847,12 +845,11 @@
                 let machines = {};
                 let waste = {};
 
-                // 1. Znajdź kolejność maszyn w nagłówku tabeli
+                // 1. Ustal kolejność maszyn
                 const machineOrder = [];
                 const headerLineIndex = lines.findIndex(l => l.includes('M1') && l.includes('M2'));
 
                 if (headerLineIndex !== -1) {
-                    // Split po tabach, filtrujemy puste i normalizujemy nazwy
                     const headers = lines[headerLineIndex].split('\t');
                     headers.forEach(h => {
                         const normalized = this.normalizeMachineName(h);
@@ -861,63 +858,66 @@
                         }
                     });
                 } else {
-                    // Fallback: domyślna kolejność jeśli nie znaleziono nagłówka
-                    console.warn('⚠️ Nie znaleziono nagłówka maszyn, używam domyślnej kolejności.');
                     machineOrder.push(...CONFIG.machines);
                 }
 
                 console.log('🏭 Wykryta kolejność maszyn:', machineOrder);
 
-                // Funkcja pomocnicza do pobierania wartości dla danego wiersza
+                // Funkcja zbierająca wartości z potencjalnie połamanych wierszy
                 const extractRowValues = (labelStart) => {
+                    // Znajdź linię startową
                     const startIdx = lines.findIndex(l => l.trim().startsWith(labelStart));
                     if (startIdx === -1) return [];
 
                     let values = [];
 
-                    // Linia 1: zawiera etykietę + dane
+                    // Linia 1:
                     let currentLine = lines[startIdx];
+                    // Tu splitujemy po tabach. Zachowujemy puste stringi!
                     let parts = currentLine.split('\t');
 
-                    // Usuwamy pierwszy element (etykietę), chyba że linia zaczyna się od tabulatora
-                    // W Excelu zazwyczaj: "Label \t val1 \t val2..." -> parts[0] to Label
-                    if (parts.length > 0 && parts[0].trim().length > 0) {
-                        parts.shift();
+                    // Usuwamy etykietę (pierwszy element), ale tylko jeśli nie jest pusty
+                    // (czasem etykieta jest w komórce 0, a dane od 1)
+                    if (parts.length > 0) {
+                        // Sprawdź czy pierwszy element to tekst etykiety
+                        if (parts[0].toLowerCase().includes(labelStart.toLowerCase().split(' ')[0])) {
+                            parts.shift();
+                        }
                     }
 
                     values.push(...parts);
 
-                    // Sprawdzamy kolejne linie pod kątem "złamanego wiersza" (częste przy odpadach)
-                    // Czytamy dalej jeśli linia nie zaczyna się od tekstu (nowej etykiety)
+                    // Czytamy kolejne linie (dla połamanych wierszy odpadów)
                     let i = startIdx + 1;
                     while (i < lines.length) {
-                        const nextLine = lines[i];
-                        const trimmedNext = nextLine.trim();
-
-                        // Jeśli pusta linia - pomiń
-                        if (!trimmedNext) {
+                        const rawNextLine = lines[i];
+                        // Sprawdzamy czy linia jest pusta (same białe znaki lub pusta)
+                        if (!rawNextLine || rawNextLine.trim() === '') {
                             i++;
                             continue;
                         }
 
-                        // Jeśli zaczyna się od litery (np. "Odpad...", "Suma"), to koniec sekcji
-                        if (/^[a-zA-Z]/.test(trimmedNext)) break;
+                        // Jeśli linia zaczyna się od litery (nowa etykieta), przerywamy
+                        // Ale uwaga: "86" to nie litera. "Odpad" to litera.
+                        if (/^[a-zA-Z]/.test(rawNextLine.trim())) break;
 
-                        // Jeśli to liczby (kontynuacja wiersza), dodaj je
-                        // Zakładamy, że kontynuacja też jest oddzielona tabami
-                        const nextParts = nextLine.split('\t');
+                        // Jeśli doszliśmy tutaj, to linia z danymi (np. "86 76...")
+                        // Splitujemy SUROWĄ linię (bez trim), żeby zachować wcięcia (tabulatory) z przodu!
+                        const nextParts = rawNextLine.split('\t');
                         values.push(...nextParts);
                         i++;
                     }
 
-                    // Filtrujemy puste wartości ("" powstaje przy podwójnych tabach) i mapujemy na liczby/tekst
-                    return values.map(v => v.trim()); // Zwracamy surowe stringi, obróbka później
+                    // Czyścimy wartości (trimujemy spacje z liczb, ale puste stringi zostają jako puste)
+                    return values.map(v => v ? v.trim() : '');
                 };
 
-                // Funkcja mapująca wartości do maszyn
                 const mapValuesToMachines = (values, targetObj, field, type = 'number') => {
+                    // Filtrujemy puste wartości TYLKO jeśli to "nadmiarowe" puste na końcu,
+                    // ale musimy zachować puste w środku (jako 0).
+                    // W tej logice po prostu iterujemy po maszynach.
+
                     machineOrder.forEach((machine, index) => {
-                        // values[index] odpowiada maszynie machineOrder[index]
                         if (index < values.length) {
                             const rawVal = values[index];
                             if (!machines[machine]) machines[machine] = {};
@@ -926,8 +926,7 @@
                             const target = targetObj === 'machines' ? machines[machine] : waste[machine];
 
                             if (type === 'number') {
-                                // Jeśli pusto lub "-", to 0
-                                if (!rawVal || rawVal === '-') {
+                                if (!rawVal || rawVal === '-' || rawVal === '') {
                                     target[field] = 0;
                                 } else {
                                     const num = parseInt(rawVal.replace(/\s/g, ''));
@@ -940,38 +939,26 @@
                     });
                 };
 
-                // Parsowanie Danych Produkcyjnych
-                const zadrukowanoVals = extractRowValues('Zadrukowano');
-                mapValuesToMachines(zadrukowanoVals, 'machines', 'zadrukowano');
+                // Parsowanie
+                mapValuesToMachines(extractRowValues('Zadrukowano'), 'machines', 'zadrukowano');
+                mapValuesToMachines(extractRowValues('Pobrano'), 'machines', 'pobrano');
+                mapValuesToMachines(extractRowValues('Ilość zleceń'), 'machines', 'zlecenia');
+                mapValuesToMachines(extractRowValues('Klient'), 'machines', 'klient', 'text');
 
-                const pobranoVals = extractRowValues('Pobrano');
-                mapValuesToMachines(pobranoVals, 'machines', 'pobrano');
-
-                const zleceniaVals = extractRowValues('Ilość zleceń');
-                mapValuesToMachines(zleceniaVals, 'machines', 'zlecenia');
-
-                const klientVals = extractRowValues('Klient');
-                mapValuesToMachines(klientVals, 'machines', 'klient', 'text');
-
-                // Parsowanie Odpadów
-                // Używamy startsWith i krótkich nazw, bo nazwy mogą się różnić ("Odpad papier biały" vs "Odpad papier biały...")
-                const wasteWhiteVals = extractRowValues('Odpad papier biały');
-                mapValuesToMachines(wasteWhiteVals, 'waste', 'bialy');
-
-                const wasteFoilVals = extractRowValues('Odpad papier PE');
-                mapValuesToMachines(wasteFoilVals, 'waste', 'folia');
-
-                const wasteGreyVals = extractRowValues('Odpad opakowanie szare');
-                mapValuesToMachines(wasteGreyVals, 'waste', 'szary');
+                // Odpady
+                mapValuesToMachines(extractRowValues('Odpad papier biały'), 'waste', 'bialy');
+                mapValuesToMachines(extractRowValues('Odpad papier PE'), 'waste', 'folia');
+                mapValuesToMachines(extractRowValues('Odpad opakowanie szare'), 'waste', 'szary');
 
                 return { machines, waste };
             }
 
             normalizeMachineName(rawName) {
+                if (!rawName) return '';
                 let normalized = rawName
                     .trim()
                     .replace(/\s*\(STREFA\)\s*/gi, '')
-                    .replace(/\s+/g, ' '); // Redukuj wielokrotne spacje
+                    .replace(/\s+/g, ' ');
 
                 const aliases = {
                     'M6': 'M6',
@@ -982,7 +969,6 @@
                 };
 
                 if (aliases[normalized]) return aliases[normalized];
-                // Usuń spacje z M 1 -> M1
                 if (/^M\s*[1-6]$/.test(normalized)) return normalized.replace(/\s/g, '');
 
                 return normalized;
@@ -1000,7 +986,6 @@
 
                 const startIndex = startMatch.index + startMatch[0].length;
                 const contentAfter = text.substring(startIndex);
-
                 const endMatch = contentAfter.match(/Nieobecności/i);
                 const rawNotes = endMatch ? contentAfter.substring(0, endMatch.index) : contentAfter;
 
@@ -1998,7 +1983,7 @@
 
     <!-- Footer with version -->
     <footer style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem;">
-        Flexo PRO Enterprise v0.0.22
+        Flexo PRO Enterprise v0.0.23
     </footer>
 </body>
 </html>
