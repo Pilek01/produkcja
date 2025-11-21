@@ -642,45 +642,50 @@
         <!-- Import View -->
         <div id="import-view" class="view">
             <div class="import-container">
-                <h2>📝 Import Danych z Emaila</h2>
+                <h2>📝 Import Danych - Multi Strefa</h2>
 
-                <!-- Wybór Strefy -->
+                <!-- Przełącznik Stref -->
                 <div style="display: flex; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px;">
                     <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                         <input type="radio" name="importZone" value="main" checked onchange="app.switchImportZone('main')">
-                        <span style="font-weight: bold;">🏭 Strefa Główna (M1-M6, SOMA 1-2)</span>
+                        <span style="font-weight: bold;">🏭 Strefa Główna</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                         <input type="radio" name="importZone" value="strefa3" onchange="app.switchImportZone('strefa3')">
-                        <span style="font-weight: bold;">🏗️ Strefa 3 (SOMA 3+)</span>
+                        <span style="font-weight: bold;">🏗️ Strefa 3 (SOMA 3)</span>
                     </label>
                 </div>
 
-                <div class="import-instructions" id="instr-main">
-                    <h3>📋 Instrukcja (Strefa Główna):</h3>
-                    <ol>
-                        <li>Skopiuj maila od brygadzisty z hali głównej.</li>
-                        <li>Wklej poniżej i kliknij "Parsuj".</li>
-                    </ol>
+                <!-- Instrukcje i Input GŁÓWNY -->
+                <div id="container-main">
+                    <div class="import-instructions">
+                        <h3>📋 Instrukcja (Strefa Główna):</h3>
+                        <p>Wklej tutaj maila z maszynami M1-M6 i SOMA 1-2.</p>
+                    </div>
+                    <textarea
+                        id="emailInputMain"
+                        placeholder="Wklej tutaj treść emaila ze Strefy Głównej..."
+                    ></textarea>
                 </div>
 
-                <div class="import-instructions" id="instr-strefa3" style="display: none;">
-                    <h3>📋 Instrukcja (Strefa 3):</h3>
-                    <ol>
-                        <li>Skopiuj maila od obsługi SOMA 3.</li>
-                        <li>Wklej poniżej i kliknij "Parsuj".</li>
-                        <li>Dane zostaną <strong>dołączone</strong> do raportu z tego dnia.</li>
-                    </ol>
+                <!-- Instrukcje i Input STREFA 3 (domyślnie ukryty) -->
+                <div id="container-strefa3" style="display: none;">
+                    <div class="import-instructions">
+                        <h3>📋 Instrukcja (Strefa 3):</h3>
+                        <p>Wklej tutaj maila z maszynami SOMA 3, 4, 5.</p>
+                        <p>Możesz przełączać zakładki bez utraty danych!</p>
+                    </div>
+                    <textarea
+                        id="emailInputZone3"
+                        placeholder="Wklej tutaj treść emaila ze Strefy 3..."
+                    ></textarea>
                 </div>
 
-                <textarea
-                    id="emailInput"
-                    placeholder="Wklej tutaj treść emaila..."
-                ></textarea>
-
-                <button onclick="app.parseEmail()" class="btn btn-primary">
-                    🔍 Parsuj dane
-                </button>
+                <div style="margin-top: 1rem; text-align: right;">
+                    <button onclick="app.parseEmail()" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 1rem;">
+                        🔍 Parsuj i Scal wszystkie wklejone dane
+                    </button>
+                </div>
 
                 <div id="parsedDataPreview" style="display: none;"></div>
             </div>
@@ -1335,16 +1340,90 @@
             // EMAIL IMPORT
             // ============================================
             parseEmail() {
-                const input = document.getElementById('emailInput').value;
+                const textMain = document.getElementById('emailInputMain').value;
+                const textZone3 = document.getElementById('emailInputZone3').value;
 
-                if (!input.trim()) {
-                    alert('Pole jest puste! Wklej email od brygadzisty.');
+                if (!textMain.trim() && !textZone3.trim()) {
+                    alert('Wklej dane przynajmniej w jedno pole!');
                     return;
                 }
 
                 try {
-                    this.tempParsedData = this.parser.parse(input);
-                    this.showParsedData(this.tempParsedData);
+                    // 1. Parsuj Główną (jeśli jest tekst)
+                    let dataMain = null;
+                    if (textMain.trim()) {
+                        console.log('📦 Parsowanie STREFY GŁÓWNEJ...');
+                        dataMain = this.parser.parse(textMain);
+                    }
+
+                    // 2. Parsuj Strefę 3 (jeśli jest tekst)
+                    let dataZone3 = null;
+                    if (textZone3.trim()) {
+                        console.log('📦 Parsowanie STREFY 3...');
+                        dataZone3 = this.parser.parse(textZone3);
+                    }
+
+                    // 3. SCALANIE DANYCH (MERGE)
+                    // Używamy danych głównych jako bazy, a jeśli ich nie ma, to danych ze strefy 3
+                    const base = dataMain || dataZone3;
+
+                    // Obiekt wynikowy
+                    const mergedData = {
+                        date: base.date,
+                        shift: base.shift,
+                        brigade: base.brigade,
+                        workers: (dataMain ? dataMain.workers : 0) + (dataZone3 ? dataZone3.workers : 0),
+                        machines: {},
+                        waste: {},
+                        notes: ''
+                    };
+
+                    // Konflikt dat/brygad? Ostrzeż, ale kontynuuj używając Głównej
+                    if (dataMain && dataZone3) {
+                        if (dataMain.date !== dataZone3.date) {
+                            alert(`⚠️ UWAGA: Różne daty w mailach!\nGłówna: ${dataMain.date}\nStrefa 3: ${dataZone3.date}\n\nUżyto daty ze Strefy Głównej.`);
+                        }
+                    }
+
+                    // Łączenie maszyn i odpadów
+                    // Funkcja pomocnicza do łączenia słowników
+                    const mergeDicts = (target, source) => {
+                        if (!source) return;
+                        Object.keys(source).forEach(key => {
+                            // Jeśli w target (Główna) maszyna jest pusta (wszystko 0), a w source (Strefa 3) ma dane -> nadpisz
+                            // Ale tutaj maszyny są rozłączne (M1 vs SOMA3), więc zwykły spread wystarczy.
+                            // Jednak dla bezpieczeństwa (gdyby SOMA 3 była w obu configach), sumujemy?
+                            // Przyjmijmy prostszy model: klucze są unikalne dla stref.
+                            target[key] = source[key];
+                        });
+                    };
+
+                    // Inicjalizacja pustych maszyn
+                    CONFIG.machines.forEach(m => {
+                        mergedData.machines[m] = { zadrukowano: 0, pobrano: 0, zlecenia: 0, klient: '' };
+                        mergedData.waste[m] = { bialy: 0, folia: 0, szary: 0 };
+                    });
+
+                    // Wypełnienie danymi
+                    if (dataMain) {
+                        mergeDicts(mergedData.machines, dataMain.machines);
+                        mergeDicts(mergedData.waste, dataMain.waste);
+                    }
+                    if (dataZone3) {
+                        mergeDicts(mergedData.machines, dataZone3.machines);
+                        mergeDicts(mergedData.waste, dataZone3.waste);
+                    }
+
+                    // Łączenie notatek
+                    let notesArr = [];
+                    if (dataMain && dataMain.notes) notesArr.push(`[GŁÓWNA]: ${dataMain.notes}`);
+                    if (dataZone3 && dataZone3.notes) notesArr.push(`[STREFA 3]: ${dataZone3.notes}`);
+                    mergedData.notes = notesArr.join('\n\n');
+
+                    // Zapisz do zmiennej tymczasowej i pokaż podgląd
+                    this.tempParsedData = mergedData;
+                    this.showParsedData(mergedData);
+
                 } catch (error) {
                     console.error('Błąd parsowania:', error);
                     alert('Błąd parsowania danych: ' + error.message);
@@ -1737,10 +1816,9 @@
             }
 
             switchImportZone(zone) {
-                document.getElementById('instr-main').style.display = zone === 'main' ? 'block' : 'none';
-                document.getElementById('instr-strefa3').style.display = zone === 'strefa3' ? 'block' : 'none';
-                document.getElementById('emailInput').value = '';
-                document.getElementById('parsedDataPreview').style.display = 'none';
+                document.getElementById('container-main').style.display = zone === 'main' ? 'block' : 'none';
+                document.getElementById('container-strefa3').style.display = zone === 'strefa3' ? 'block' : 'none';
+                // UWAGA: Nie czyścimy .value, dzięki temu dane zostają w pamięci!
             }
 
             selectMachine(machine) {
@@ -2000,7 +2078,7 @@
 
     <!-- Footer with version -->
     <footer style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem;">
-        Flexo PRO Enterprise v0.0.27
+        Flexo PRO Enterprise v0.0.28
     </footer>
 </body>
 </html>
