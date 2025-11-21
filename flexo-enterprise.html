@@ -642,52 +642,46 @@
         <!-- Import View -->
         <div id="import-view" class="view">
             <div class="import-container">
-                <h2>📝 Import Danych - Multi Strefa</h2>
+                <h2>📝 Import Danych z Emaili</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                    Wklej maile z różnych stref produkcji. Parser automatycznie scali dane przed zapisem.
+                </p>
 
-                <!-- Przełącznik Stref -->
-                <div style="display: flex; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                        <input type="radio" name="importZone" value="main" checked onchange="app.switchImportZone('main')">
-                        <span style="font-weight: bold;">🏭 Strefa Główna</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                        <input type="radio" name="importZone" value="strefa3" onchange="app.switchImportZone('strefa3')">
-                        <span style="font-weight: bold;">🏗️ Strefa 3 (SOMA 3)</span>
-                    </label>
-                </div>
+                <!-- Dwa inputy obok siebie -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
 
-                <!-- Instrukcje i Input GŁÓWNY -->
-                <div id="container-main">
-                    <div class="import-instructions">
-                        <h3>📋 Instrukcja (Strefa Główna):</h3>
-                        <p>Wklej tutaj maila z maszynami M1-M6 i SOMA 1-2.</p>
+                    <!-- Strefa Główna -->
+                    <div>
+                        <h3 style="margin-bottom: 0.5rem; color: var(--primary);">
+                            🏭 Strefa Główna (M1-M6, SOMA 1-2)
+                        </h3>
+                        <textarea
+                            id="emailInputMain"
+                            placeholder="Wklej tutaj email ze Strefy Głównej...&#10;&#10;Parser rozpozna automatycznie:&#10;✅ Data, zmiana, brygada&#10;✅ Liczba pracowników&#10;✅ Produkcja (zadrukowano, pobrano)&#10;✅ Zlecenia i klienci&#10;✅ Odpady (biały, PE, szary)"
+                            style="width: 100%; min-height: 400px; padding: 1rem; font-family: 'Courier New', monospace; font-size: 0.9rem; border: 2px solid var(--border); border-radius: 8px; resize: vertical;"
+                        ></textarea>
                     </div>
-                    <textarea
-                        id="emailInputMain"
-                        placeholder="Wklej tutaj treść emaila ze Strefy Głównej..."
-                    ></textarea>
-                </div>
 
-                <!-- Instrukcje i Input STREFA 3 (domyślnie ukryty) -->
-                <div id="container-strefa3" style="display: none;">
-                    <div class="import-instructions">
-                        <h3>📋 Instrukcja (Strefa 3):</h3>
-                        <p>Wklej tutaj maila z maszynami SOMA 3, 4, 5.</p>
-                        <p>Możesz przełączać zakładki bez utraty danych!</p>
+                    <!-- Strefa 3 -->
+                    <div>
+                        <h3 style="margin-bottom: 0.5rem; color: var(--accent);">
+                            🏗️ Strefa 3 (SOMA 3)
+                        </h3>
+                        <textarea
+                            id="emailInputZone3"
+                            placeholder="Wklej tutaj email ze Strefy 3...&#10;&#10;Możesz wkleić tylko jeden mail lub oba.&#10;&#10;Jeśli wkleisz oba, parser automatycznie&#10;scali dane przed wyświetleniem podglądu."
+                            style="width: 100%; min-height: 400px; padding: 1rem; font-family: 'Courier New', monospace; font-size: 0.9rem; border: 2px solid var(--border); border-radius: 8px; resize: vertical;"
+                        ></textarea>
                     </div>
-                    <textarea
-                        id="emailInputZone3"
-                        placeholder="Wklej tutaj treść emaila ze Strefy 3..."
-                    ></textarea>
                 </div>
 
-                <div style="margin-top: 1rem; text-align: right;">
-                    <button onclick="app.parseEmail()" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 1rem;">
-                        🔍 Parsuj i Scal wszystkie wklejone dane
+                <div style="text-align: center;">
+                    <button onclick="app.parseEmail()" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;">
+                        🔍 Parsuj i Scal Dane
                     </button>
                 </div>
 
-                <div id="parsedDataPreview" style="display: none;"></div>
+                <div id="parsedDataPreview" style="display: none; margin-top: 2rem;"></div>
             </div>
         </div>
 
@@ -1815,12 +1809,6 @@
                 submenu.innerHTML = html;
             }
 
-            switchImportZone(zone) {
-                document.getElementById('container-main').style.display = zone === 'main' ? 'block' : 'none';
-                document.getElementById('container-strefa3').style.display = zone === 'strefa3' ? 'block' : 'none';
-                // UWAGA: Nie czyścimy .value, dzięki temu dane zostają w pamięci!
-            }
-
             selectMachine(machine) {
                 this.currentMachine = machine;
                 this.renderMachinesSubmenu();
@@ -2078,7 +2066,7 @@
 
     <!-- Footer with version -->
     <footer style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem;">
-        Flexo PRO Enterprise v0.0.28
+        Flexo PRO Enterprise v0.0.29
     </footer>
 </body>
 </html>
