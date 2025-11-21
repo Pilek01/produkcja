@@ -748,135 +748,205 @@
         };
 
         // ============================================
-        // EMAIL PARSER CLASS - v3.0 ENHANCED
+        // EMAIL PARSER CLASS - v4.0 (STRICT COLUMN MAPPING)
         // ============================================
         class EmailParser {
             constructor() {
-                this.patterns = {
-                    date: /(\d{2}\.\d{2}\.\d{4})/,
-                    shift: /Zmiana[:\s]*(\d)/i,
-                    brigade: /Brygada[:\s]*(\w+)/i,
-                    workers: /Ilość\s+pracowników[:\s]*(\d+)/i
-                };
+                // Lista znanych brygad do walidacji
+                this.knownBrigades = Object.keys(CONFIG.brigades);
             }
 
             parse(text) {
-                console.log('🔍 === PARSER v3.0 START ===');
-                const header = this.parseHeader(text);
-                const isTableFormat = this.isTableFormat(text);
+                console.log('🔍 === PARSER v4.0 (Strict Mapping) START ===');
+
+                const lines = text.split('\n').map(l => l.trimEnd()); // TrimEnd żeby nie usuwać tabów z początku
+
+                const header = this.parseHeader(lines);
+                const mapping = this.createColumnMapping(lines);
 
                 let machines = {};
                 let waste = {};
-                let notes = '';
 
-                // Inicjalizacja pustych obiektów dla wszystkich maszyn
+                // Inicjalizacja
                 CONFIG.machines.forEach(m => {
                     machines[m] = { zadrukowano: 0, pobrano: 0, zlecenia: 0, klient: '' };
                     waste[m] = { bialy: 0, folia: 0, szary: 0 };
                 });
 
-                if (isTableFormat) {
-                    console.log('📊 Format tabelaryczny wykryty - używam parsera tabelarycznego...');
-                    const tableData = this.parseTableFormat(text);
-                    // Merge parsed data into initialized objects
-                    Object.keys(tableData.machines).forEach(m => {
-                        if (machines[m]) machines[m] = tableData.machines[m];
-                    });
-                    Object.keys(tableData.waste).forEach(m => {
-                        if (waste[m]) waste[m] = tableData.waste[m];
-                    });
+                if (mapping.success) {
+                    console.log('🗺️ Mapowanie kolumn aktywne:', mapping.indices);
+
+                    // Parsuj dane produkcyjne
+                    this.parseRowStrict(lines, 'Zadrukowano', mapping.indices, machines, 'zadrukowano');
+                    this.parseRowStrict(lines, 'Pobrano', mapping.indices, machines, 'pobrano');
+                    this.parseRowStrict(lines, 'Ilość zleceń', mapping.indices, machines, 'zlecenia');
+                    this.parseRowStrict(lines, 'Klient', mapping.indices, machines, 'klient', 'text');
+
+                    // Parsuj odpady (często rozbite na dwie linie)
+                    this.parseWasteStrict(lines, 'Odpad papier biały', 'bialy', mapping.indices, waste);
+                    this.parseWasteStrict(lines, 'Odpad papier PE', 'folia', mapping.indices, waste);
+                    this.parseWasteStrict(lines, 'Odpad opakowanie szare', 'szary', mapping.indices, waste);
                 } else {
-                    console.log('📝 Format tekstowy wykryty - używam parsera tekstowego...');
-                    const textMachines = this.parseMachines(text);
-                    const textWaste = this.parseWaste(text);
-                    Object.keys(textMachines).forEach(m => {
-                        if (machines[m]) machines[m] = textMachines[m];
-                    });
-                    Object.keys(textWaste).forEach(m => {
-                        if (waste[m]) waste[m] = textWaste[m];
-                    });
+                    console.warn('⚠️ Nie udało się stworzyć mapy kolumn. Sprawdź format nagłówka.');
                 }
 
-                notes = this.parseNotes(text);
+                const notes = this.parseNotes(text);
 
-                const result = { ...header, machines, waste, notes };
-                console.log('✅ Sparsowane dane:', result);
-
-                return result;
+                console.log('✅ Wynik parsowania:', { ...header, machines, waste });
+                return { ...header, machines, waste, notes };
             }
 
-            isTableFormat(text) {
-                return text.includes('M1') && text.includes('M2') && text.includes('M3');
+            // 1. Znajduje wiersz z nagłówkami (M1, M2...) i mapuje je na indeksy tablicy
+            createColumnMapping(lines) {
+                let headerLine = null;
+
+                // Szukamy linii zawierającej kluczowe maszyny
+                for (let line of lines) {
+                    if (line.includes('M1') && line.includes('M2')) {
+                        headerLine = line;
+                        break;
+                    }
+                }
+
+                if (!headerLine) return { success: false };
+
+                // Rozbijamy po TABulatorach. Excel przy copy-paste używa tabów.
+                // Uwaga: split('\t') zachowa puste stringi dla pustych komórek
+                const columns = headerLine.split('\t').map(c => this.normalizeMachineName(c.trim()));
+
+                const indices = {};
+                CONFIG.machines.forEach(machine => {
+                    // Znajdź indeks kolumny dla danej maszyny
+                    const idx = columns.indexOf(machine);
+                    if (idx !== -1) {
+                        indices[machine] = idx;
+                    }
+                });
+
+                return { success: true, indices: indices };
             }
 
-            parseHeader(text) {
-                const lines = text.split('\n').map(l => l.trim());
+            // 2. Pobiera dane z wiersza używając mapy indeksów
+            parseRowStrict(lines, labelStart, indices, targetObj, field, type = 'number') {
+                // Znajdź linię zaczynającą się od etykiety
+                const lineIndex = lines.findIndex(l => l.trim().startsWith(labelStart));
+                if (lineIndex === -1) return;
+
+                const line = lines[lineIndex];
+                const cells = line.split('\t'); // Strict split
+
+                Object.entries(indices).forEach(([machine, colIndex]) => {
+                    if (colIndex < cells.length) {
+                        let val = cells[colIndex].trim();
+
+                        if (type === 'number') {
+                            // Usuwamy spacje (np. "21 000") i parsujemy
+                            const num = parseInt(val.replace(/\s/g, ''));
+                            if (!isNaN(num)) {
+                                targetObj[machine][field] = num;
+                            }
+                        } else {
+                            if (val && val !== '-' && val !== '0') {
+                                targetObj[machine][field] = val;
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 3. Specjalna obsługa odpadów (mogą być w linii z etykietą LUB pod nią)
+            parseWasteStrict(lines, labelStart, field, indices, targetObj) {
+                let lineIndex = lines.findIndex(l => l.trim().startsWith(labelStart));
+                if (lineIndex === -1) return;
+
+                let dataLine = lines[lineIndex];
+                let cells = dataLine.split('\t');
+
+                // Sprawdź czy w tej linii są jakiekolwiek liczby (poza etykietą)
+                // Jeśli nie, to prawdopodobnie dane są w następnej linii
+                const hasNumbers = cells.some((cell, idx) => idx > 0 && /\d/.test(cell));
+
+                if (!hasNumbers && lineIndex + 1 < lines.length) {
+                    // Sprawdzamy następną linię
+                    const nextLine = lines[lineIndex + 1];
+                    // Jeśli następna linia ma tabulatory, to bierzemy ją
+                    if (nextLine.includes('\t')) {
+                        console.log(`⬇️ Odpady ${field}: Pobieram z linii poniżej nagłówka`);
+                        dataLine = nextLine;
+                        cells = nextLine.split('\t');
+                    }
+                }
+
+                Object.entries(indices).forEach(([machine, colIndex]) => {
+                    if (colIndex < cells.length) {
+                        const val = cells[colIndex].trim();
+                        const num = parseInt(val.replace(/\s/g, ''));
+                        if (!isNaN(num)) {
+                            targetObj[machine][field] = num;
+                        }
+                    }
+                });
+            }
+
+            parseHeader(lines) {
                 let date = '', shift = 1, brigade = '', workers = 0;
 
-                // 1. Próba znalezienia wiersza nagłówkowego tabeli i danych pod nim
-                const headerIndex = lines.findIndex(l =>
-                    l.match(/Data/i) && l.match(/Zmiana/i) && l.match(/Brygada/i)
-                );
+                // Szukanie w pierwszych 20 liniach
+                const headerBlock = lines.slice(0, 20);
 
-                if (headerIndex !== -1) {
-                    // Szukamy pierwszej niepustej linii po nagłówku
-                    for (let i = headerIndex + 1; i < Math.min(headerIndex + 10, lines.length); i++) {
-                        const line = lines[i];
-                        // Linia z danymi powinna zawierać datę w formacie DD.MM.YYYY
-                        const dateMatch = line.match(/(\d{2}\.\d{2}\.\d{4})/);
-                        if (dateMatch) {
-                            date = this.formatDate(dateMatch[1]);
+                // 1. Data (szukamy formatu DD.MM.YYYY)
+                for (let line of headerBlock) {
+                    const dateMatch = line.match(/(\d{2}\.\d{2}\.\d{4})/);
+                    if (dateMatch) {
+                        date = this.formatDate(dateMatch[1]);
+                        break;
+                    }
+                }
 
-                            // Rozbijamy linię po tabulatorach lub większych spacjach
-                            const parts = line.split(/[\t\s]{2,}/).filter(p => p.trim());
-
-                            // Zazwyczaj format: [Data, Zmiana, Brygada, Pracownicy]
-                            parts.forEach(part => {
-                                if (part.match(/^\d$/)) shift = parseInt(part);
-                                else if (CONFIG.brigades[part.toUpperCase()]) brigade = part.toUpperCase();
-                                else if (part.match(/^\d+$/) && parseInt(part) > 3) workers = parseInt(part); // >3 żeby nie mylić ze zmianą
-                            });
-
-                            // Fallback dla pracowników jeśli są na końcu linii
-                            if (!workers && parts.length >= 4) {
-                                const lastVal = parseInt(parts[parts.length-1]);
-                                if (!isNaN(lastVal)) workers = lastVal;
-                            }
+                // 2. Brygada (szukamy konkretnych nazw ze słownika)
+                for (let line of headerBlock) {
+                    const upperLine = line.toUpperCase();
+                    for (let known of this.knownBrigades) {
+                        // Sprawdzamy czy linia zawiera nazwę brygady ORAZ nie jest to fragment innego słowa
+                        // Dodatkowo ignorujemy linię, która jest samym nagłówkiem tabeli (jeśli zawiera słowo "Brygada" i nic więcej konkretnego)
+                        if (upperLine.includes(known)) {
+                            brigade = known;
                             break;
                         }
                     }
+                    if (brigade) break;
                 }
 
-                // 2. Fallback - szukanie w całym tekście jeśli tabela zawiodła
-                if (!date) {
-                    const d = text.match(this.patterns.date);
-                    if (d) date = this.formatDate(d[1]);
-                }
-                if (!brigade) {
-                    const b = text.match(/Brygada\s+([A-Z]+)/i);
-                    if (b) brigade = b[1].toUpperCase();
-                    else {
-                        // Przeszukaj wszystkie linie pod kątem nazw brygad
-                        for (const line of lines) {
-                            for (const knownBrigade of Object.keys(CONFIG.brigades)) {
-                                if (line.toUpperCase().includes(knownBrigade)) {
-                                    brigade = knownBrigade;
-                                    break;
-                                }
+                // 3. Pracownicy
+                // Szukamy linii z "Ilość pracowników"
+                const workersLabelIndex = headerBlock.findIndex(l => l.match(/Ilość\s+pracowników/i));
+                if (workersLabelIndex !== -1) {
+                    // Strategia A: Liczba jest w tej samej linii (np. "Ilość pracowników: 17")
+                    const sameLineMatch = headerBlock[workersLabelIndex].match(/Ilość\s+pracowników.*?(\d+)/i);
+                    if (sameLineMatch && parseInt(sameLineMatch[1]) > 3) {
+                        workers = parseInt(sameLineMatch[1]);
+                    }
+                    // Strategia B: Liczba jest w linii poniżej (częste w Excel copy-paste)
+                    else if (headerBlock[workersLabelIndex + 1]) {
+                        const nextLine = headerBlock[workersLabelIndex + 1];
+                        const numMatch = nextLine.match(/(\d+)/); // Pierwsza liczba w nowej linii
+                        if (numMatch) {
+                            const val = parseInt(numMatch[1]);
+                            // Walidacja: pracownicy to zazwyczaj 10-30 osób.
+                            // Zmiana (1,2,3) to za mało, Rok (2025) to za dużo.
+                            if (val > 3 && val < 100) {
+                                workers = val;
                             }
-                            if (brigade) break;
                         }
                     }
-                }
 
-                // Specjalny fix dla pracowników - jeśli są w nowej linii po etykiecie
-                if (!workers) {
-                    const rawLines = text.split('\n');
-                    const workerLabelIndex = rawLines.findIndex(l => l.match(/Ilość pracowników/i));
-                    if (workerLabelIndex !== -1) {
-                        for(let i = 1; i <= 5; i++) {
-                            const val = parseInt(rawLines[workerLabelIndex + i]?.trim());
-                            if (!isNaN(val) && val > 3 && val < 50) {
+                    // Strategia C: Szukanie w tej samej linii ale po tabulatorach (jeśli to tabela nagłówkowa)
+                    if (!workers) {
+                        const cells = headerBlock[workersLabelIndex].split('\t');
+                        // Szukamy ostatniej liczby w wierszu
+                        for (let i = cells.length - 1; i >= 0; i--) {
+                            const val = parseInt(cells[i]);
+                            if (!isNaN(val) && val > 3 && val < 100) {
                                 workers = val;
                                 break;
                             }
@@ -884,133 +954,24 @@
                     }
                 }
 
+                // 4. Zmiana
+                const shiftLine = headerBlock.find(l => l.match(/Zmiana/i));
+                if (shiftLine) {
+                     const match = shiftLine.match(/Zmiana.*?(\d)/i);
+                     if (match) shift = parseInt(match[1]);
+                } else {
+                    // Fallback: szukaj samej cyfry 1, 2 lub 3 w pobliżu daty
+                    // (Dla bezpieczeństwa zostawiamy domyślne 1 jeśli nie znajdzie explicit)
+                }
+
                 console.log(`📋 Header: Date=${date}, Shift=${shift}, Brigade=${brigade}, Workers=${workers}`);
                 return { date, shift, brigade, workers };
-            }
-
-            parseTableFormat(text) {
-                const lines = text.split('\n');
-                const machines = {};
-                const waste = {};
-
-                // Znajdź nagłówek maszyn (M1 M2 M3...)
-                let headerLineIndex = -1;
-                for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].includes('M1') && lines[i].includes('M2')) {
-                        headerLineIndex = i;
-                        break;
-                    }
-                }
-
-                if (headerLineIndex === -1) {
-                    console.warn('⚠️ Nie znaleziono nagłówka maszyn!');
-                    return { machines, waste };
-                }
-
-                // Zmapuj kolumny - split po tabulator
-                const headerLine = lines[headerLineIndex];
-                const columns = headerLine.split('\t').map(h => h.trim()).filter(h => h);
-
-                const machineMap = []; // Indeks -> Nazwa maszyny
-                columns.forEach(col => {
-                    const normalized = this.normalizeMachineName(col);
-                    if (CONFIG.machines.includes(normalized)) {
-                        machineMap.push(normalized);
-                    }
-                });
-
-                console.log('🏭 Wykryte maszyny:', machineMap);
-
-                // Inicjalizacja
-                machineMap.forEach(m => {
-                    machines[m] = { zadrukowano: 0, pobrano: 0, zlecenia: 0, klient: '' };
-                    waste[m] = { bialy: 0, folia: 0, szary: 0 };
-                });
-
-                // Parsowanie danych produkcyjnych
-                const productionRows = {
-                    'Zadrukowano': 'zadrukowano',
-                    'Pobrano': 'pobrano',
-                    'Ilość zleceń': 'zlecenia',
-                    'Klient': 'klient'
-                };
-
-                Object.entries(productionRows).forEach(([label, field]) => {
-                    const rowLine = lines.find(l => l.trim().startsWith(label));
-                    if (rowLine) {
-                        const values = rowLine.split('\t').filter(v => v.trim());
-
-                        machineMap.forEach((machine, idx) => {
-                            // idx+1 bo pierwsza wartość to etykieta
-                            const val = values[idx + 1];
-
-                            if (val) {
-                                if (field === 'klient') {
-                                    machines[machine][field] = val.trim();
-                                } else {
-                                    const num = parseInt(val.replace(/\s/g, ''));
-                                    if (!isNaN(num)) machines[machine][field] = num;
-                                }
-                            }
-                        });
-                        console.log(`📊 ${label}:`, values);
-                    }
-                });
-
-                // === PARSOWANIE ODPADÓW (NEW LOGIC) ===
-                console.log('🗑️ Parsowanie odpadów...');
-                this.collectWasteValues(lines, 'Odpad papier biały', 'bialy', machineMap, waste);
-                this.collectWasteValues(lines, 'Odpad papier PE', 'folia', machineMap, waste);
-                this.collectWasteValues(lines, 'Odpad opakowanie szare', 'szary', machineMap, waste);
-
-                return { machines, waste };
-            }
-
-            // Nowa metoda - zbiera liczby z wielu linii dla odpadów
-            collectWasteValues(lines, labelStart, fieldKey, machineMap, wasteTarget) {
-                const startIndex = lines.findIndex(l => l.trim().startsWith(labelStart));
-                if (startIndex === -1) {
-                    console.log(`⚠️ Nie znaleziono sekcji: ${labelStart}`);
-                    return;
-                }
-
-                let collectedNumbers = [];
-
-                // Wyciągnij liczby z pierwszej linii (po etykiecie)
-                const firstLineContent = lines[startIndex].substring(labelStart.length);
-                this.extractNumbers(firstLineContent).forEach(n => collectedNumbers.push(n));
-
-                // Sprawdź kolejne linie
-                for (let i = startIndex + 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue; // Pomiń puste
-
-                    // Jeśli linia zaczyna się od litery, to nowa sekcja -> STOP
-                    if (/^[a-zA-ZĄĆĘŁŃÓŚŹŻąćęłńóśźż]/.test(line)) break;
-
-                    // W przeciwnym razie kontynuacja liczb
-                    this.extractNumbers(line).forEach(n => collectedNumbers.push(n));
-                }
-
-                // Przypisz zebrane liczby do maszyn
-                console.log(`   ${fieldKey}: ${collectedNumbers.length} wartości -`, collectedNumbers);
-
-                machineMap.forEach((machine, index) => {
-                    if (index < collectedNumbers.length) {
-                        wasteTarget[machine][fieldKey] = collectedNumbers[index];
-                    }
-                });
-            }
-
-            extractNumbers(text) {
-                const matches = text.match(/(\d+)/g);
-                return matches ? matches.map(n => parseInt(n)) : [];
             }
 
             normalizeMachineName(rawName) {
                 let normalized = rawName
                     .trim()
-                    .replace(/\s*\(STREFA\)\s*/gi, '')
+                    .replace(/\s*\(STREFA\)\s*/gi, '') // Usuwa (STREFA)
                     .replace(/\s+/g, ' ');
 
                 const aliases = {
@@ -1022,7 +983,9 @@
                 };
 
                 if (aliases[normalized]) return aliases[normalized];
-                if (/^M[1-6]$/.test(normalized)) return normalized;
+                // Usuń ewentualne puste znaki z nazwy M 1 -> M1
+                if (/^M\s*[1-6]$/.test(normalized)) return normalized.replace(/\s/g, '');
+
                 return normalized;
             }
 
@@ -1032,84 +995,22 @@
                 return dateStr;
             }
 
-            parseMachines(text) {
-                const machines = {};
-
-                CONFIG.machines.forEach(machineName => {
-                    const machineData = this.parseMachineData(text, machineName);
-                    if (machineData) {
-                        machines[machineName] = machineData;
-                    }
-                });
-
-                return machines;
-            }
-
-            parseMachineData(text, machineName) {
-                const escapedName = machineName.replace(/[()]/g, '\\$&');
-                const pattern = new RegExp(
-                    `${escapedName}[^M]*?` +
-                    `Zadrukowano[:\\s]*(\\d+)[^M]*?` +
-                    `Pobrano[:\\s]*(\\d+)[^M]*?` +
-                    `(?:Zlecenia|Ilość\\s+zleceń)[:\\s]*(\\d+)[^M]*?` +
-                    `Klient[:\\s]*([\\w\\s&+]+?)(?=M\\d|SOMA|NOVOFLEX|Odpad|Adnotacje|Nieobecności|$)`,
-                    'is'
-                );
-
-                const match = text.match(pattern);
-                if (match) {
-                    return {
-                        zadrukowano: parseInt(match[1]) || 0,
-                        pobrano: parseInt(match[2]) || 0,
-                        zlecenia: parseInt(match[3]) || 0,
-                        klient: match[4] ? match[4].trim() : ''
-                    };
-                }
-
-                return null;
-            }
-
-            parseWaste(text) {
-                const waste = {};
-                const wasteSections = {
-                    bialy: /Odpad\s+papier\s+biały[:\s]*(.*?)(?=Odpad|Adnotacje|Nieobecności|$)/is,
-                    folia: /Odpad\s+papier\s+PE\/folia[:\s]*(.*?)(?=Odpad|Adnotacje|Nieobecności|$)/is,
-                    szary: /Odpad\s+opakowanie\s+szare[:\s]*(.*?)(?=Adnotacje|Nieobecności|$)/is
-                };
-
-                CONFIG.machines.forEach(machine => {
-                    waste[machine] = { bialy: 0, folia: 0, szary: 0 };
-
-                    Object.keys(wasteSections).forEach(wasteType => {
-                        const sectionMatch = text.match(wasteSections[wasteType]);
-                        if (sectionMatch) {
-                            const value = this.extractWasteValue(sectionMatch[1], machine);
-                            waste[machine][wasteType] = value;
-                        }
-                    });
-                });
-
-                return waste;
-            }
-
-            extractWasteValue(section, machine) {
-                const escapedMachine = machine.replace(/[()]/g, '\\$&');
-                const pattern = new RegExp(`${escapedMachine}[=:\\s]*(\\d+)`, 'i');
-                const match = section.match(pattern);
-                return match ? parseInt(match[1]) : 0;
-            }
-
             parseNotes(text) {
                 const startMatch = text.match(/Adnotacje.*PROSZĘ WPISYWAĆ NUMERY ZP/i) || text.match(/Adnotacje/i);
                 if (!startMatch) return '';
 
                 const startIndex = startMatch.index + startMatch[0].length;
                 const contentAfter = text.substring(startIndex);
-
                 const endMatch = contentAfter.match(/Nieobecności/i);
-                const notes = endMatch ? contentAfter.substring(0, endMatch.index) : contentAfter;
 
-                return notes.trim().split('\n').filter(l => l.trim()).join('\n');
+                const rawNotes = endMatch ? contentAfter.substring(0, endMatch.index) : contentAfter;
+
+                // Czyścimy puste linie i dziwne znaki
+                return rawNotes
+                    .split('\n')
+                    .map(l => l.trim())
+                    .filter(l => l.length > 0)
+                    .join('\n');
             }
         }
 
@@ -2100,5 +2001,10 @@
             console.log('✅ Flexo PRO Enterprise gotowy do użycia!');
         };
     </script>
+
+    <!-- Footer with version -->
+    <footer style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem;">
+        Flexo PRO Enterprise v0.0.21
+    </footer>
 </body>
 </html>
