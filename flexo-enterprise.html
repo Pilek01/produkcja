@@ -644,21 +644,38 @@
             <div class="import-container">
                 <h2>📝 Import Danych z Emaila</h2>
 
-                <div class="import-instructions">
-                    <h3>📋 Instrukcja:</h3>
+                <!-- Wybór Strefy -->
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="importZone" value="main" checked onchange="app.switchImportZone('main')">
+                        <span style="font-weight: bold;">🏭 Strefa Główna (M1-M6, SOMA 1-2)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="importZone" value="strefa3" onchange="app.switchImportZone('strefa3')">
+                        <span style="font-weight: bold;">🏗️ Strefa 3 (SOMA 3+)</span>
+                    </label>
+                </div>
+
+                <div class="import-instructions" id="instr-main">
+                    <h3>📋 Instrukcja (Strefa Główna):</h3>
                     <ol>
-                        <li>Skopiuj cały email od brygadzisty (Ctrl+C)</li>
-                        <li>Wklej poniżej w pole tekstowe (Ctrl+V)</li>
-                        <li>Kliknij przycisk "🔍 Parsuj dane"</li>
-                        <li>Sprawdź automatycznie wypełnione pola</li>
-                        <li>Popraw wartości jeśli to konieczne</li>
-                        <li>Kliknij "✅ Zatwierdź i zapisz"</li>
+                        <li>Skopiuj maila od brygadzisty z hali głównej.</li>
+                        <li>Wklej poniżej i kliknij "Parsuj".</li>
+                    </ol>
+                </div>
+
+                <div class="import-instructions" id="instr-strefa3" style="display: none;">
+                    <h3>📋 Instrukcja (Strefa 3):</h3>
+                    <ol>
+                        <li>Skopiuj maila od obsługi SOMA 3.</li>
+                        <li>Wklej poniżej i kliknij "Parsuj".</li>
+                        <li>Dane zostaną <strong>dołączone</strong> do raportu z tego dnia.</li>
                     </ol>
                 </div>
 
                 <textarea
                     id="emailInput"
-                    placeholder="Wklej tutaj email od brygadzisty...&#10;&#10;Parser rozpoznaje automatycznie format:&#10;✅ Tabela z Excel/Google Sheets (Ctrl+C z tabeli)&#10;✅ Tekst z formatowaniem&#10;&#10;Po prostu wklej (Ctrl+V) i kliknij 'Parsuj' - resztę załatwi parser! 🚀"
+                    placeholder="Wklej tutaj treść emaila..."
                 ></textarea>
 
                 <button onclick="app.parseEmail()" class="btn btn-primary">
@@ -710,7 +727,7 @@
         // CONFIGURATION
         // ============================================
         const CONFIG = {
-            machines: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'SOMA 1', 'SOMA 2', 'SOMA 3', 'NOVOFLEX 1'],
+            machines: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'SOMA 1', 'SOMA 2', 'SOMA 3', 'SOMA 4', 'SOMA 5', 'NOVOFLEX 1'],
 
             brigades: {
                 'MICHALAK': {
@@ -748,7 +765,7 @@
         };
 
         // ============================================
-        // EMAIL PARSER CLASS - v7.1 (FIXED INITIALIZATION ORDER)
+        // EMAIL PARSER CLASS - v8.0 (UNIVERSAL HEADER DETECTION)
         // ============================================
         class EmailParser {
             constructor() {
@@ -756,7 +773,7 @@
             }
 
             parse(text) {
-                console.log('🔍 === PARSER v7.1 (Final Fix) START ===');
+                console.log('🔍 === PARSER v8.0 (Universal) START ===');
 
                 const lines = text.split('\n');
 
@@ -766,11 +783,8 @@
                 let machines = tableData.machines;
                 let waste = tableData.waste;
 
-                // Uzupełnianie brakujących maszyn z configu (np. SOMA 3)
-                CONFIG.machines.forEach(m => {
-                    if (!machines[m]) machines[m] = { zadrukowano: 0, pobrano: 0, zlecenia: 0, klient: '' };
-                    if (!waste[m]) waste[m] = { bialy: 0, folia: 0, szary: 0 };
-                });
+                // Nie uzupełniamy zerami tutaj! Zrobimy to przy zapisie/mergowaniu.
+                // Parser zwraca tylko to, co znalazł w tekście.
 
                 const notes = this.parseNotes(text);
 
@@ -787,31 +801,28 @@
                     const dateMatch = lines[i].match(/(\d{2}\.\d{2}\.\d{4})/);
                     if (dateMatch) {
                         date = this.formatDate(dateMatch[1]);
-
                         const parts = lines[i].split('\t').map(p => p.trim());
-                        console.log('📅 Header parts:', parts);
 
                         // Zmiana
-                        if (parts.length > 1 && /^\d$/.test(parts[1])) {
-                            shift = parseInt(parts[1]);
-                        }
+                        if (parts.length > 1 && /^\d$/.test(parts[1])) shift = parseInt(parts[1]);
 
                         // Brygada
                         if (parts.length > 2) {
                             const potentialBrigade = parts[2].toUpperCase();
-                            if (this.knownBrigades.includes(potentialBrigade)) {
-                                brigade = potentialBrigade;
-                            }
+                            // Normalizacja nazwy (np. Michalak -> MICHALAK)
+                            const match = this.knownBrigades.find(b => potentialBrigade.includes(b));
+                            if (match) brigade = match;
+                            else if (potentialBrigade.length > 2) brigade = potentialBrigade; // Akceptuj też nieznane
                         }
 
-                        // Pracownicy - STRICT MODE (Indeks 3 lub 4)
-                        if (parts.length > 3) {
-                            const val = parseInt(parts[3]);
-                            if (!isNaN(val) && val > 3 && val < 100) workers = val;
-                        }
-                        if (!workers && parts.length > 4) {
-                            const val = parseInt(parts[4]);
-                            if (!isNaN(val) && val > 3 && val < 100) workers = val;
+                        // Pracownicy (Indeks 3 lub 4)
+                        // Obniżamy próg do >0, bo w Strefie 3 może być 2 pracowników
+                        const findWorkers = (val) => !isNaN(val) && val > 0 && val < 100;
+
+                        if (parts.length > 3 && findWorkers(parseInt(parts[3]))) {
+                            workers = parseInt(parts[3]);
+                        } else if (parts.length > 4 && findWorkers(parseInt(parts[4]))) {
+                            workers = parseInt(parts[4]);
                         }
 
                         break;
@@ -838,49 +849,55 @@
             parseTableData(lines) {
                 let machines = {};
                 let waste = {};
-
-                // Ustal kolejność maszyn
                 const machineOrder = [];
-                const headerLineIndex = lines.findIndex(l => l.includes('M1') && l.includes('M2'));
+
+                // 1. Uniwersalne szukanie nagłówka
+                // Szukamy linii, która zawiera nazwę przynajmniej jednej maszyny z konfigu
+                let headerLineIndex = -1;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    const hasMachine = CONFIG.machines.some(m => line.includes(m) || line.includes(m.replace(' ', '')));
+                    if (hasMachine) {
+                        headerLineIndex = i;
+                        break;
+                    }
+                }
 
                 if (headerLineIndex !== -1) {
+                    console.log('🎯 Znaleziono nagłówek tabeli w linii:', headerLineIndex);
                     const headers = lines[headerLineIndex].split('\t');
+
                     headers.forEach(h => {
                         const normalized = this.normalizeMachineName(h);
                         if (CONFIG.machines.includes(normalized)) {
                             machineOrder.push(normalized);
                         }
                     });
-                } else {
-                    machineOrder.push(...CONFIG.machines);
                 }
 
-                // Ekstrakcja wartości z wierszy
+                console.log('🏭 Wykryte maszyny w tabeli:', machineOrder);
+
+                // Ekstrakcja wartości
                 const extractRowValues = (labelStart) => {
                     const startIdx = lines.findIndex(l => l.trim().startsWith(labelStart));
                     if (startIdx === -1) return [];
 
                     let values = [];
-
-                    // Pierwsza linia
                     let currentLine = lines[startIdx];
                     let parts = currentLine.split('\t');
 
-                    // Usuń etykietę jeśli jest w pierwszej komórce
+                    // Usuń etykietę
                     if (parts.length > 0 && parts[0].toLowerCase().includes(labelStart.toLowerCase().split(' ')[0])) {
                         parts.shift();
                     }
                     values.push(...parts);
 
-                    // Kolejne linie (połamane wiersze)
                     let i = startIdx + 1;
                     while (i < lines.length) {
                         const rawNextLine = lines[i];
-
-                        // Stop na nowej etykiecie
                         if (rawNextLine.trim().length > 0 && /^[a-zA-Z]/.test(rawNextLine.trim())) break;
 
-                        // Pusta linia = pusta komórka (0)
                         if (!rawNextLine || rawNextLine.trim() === '') {
                             values.push('');
                         } else {
@@ -889,20 +906,16 @@
                         }
                         i++;
                     }
-
                     return values.map(v => v ? v.trim() : '');
                 };
 
                 const mapValuesToMachines = (values, targetObj, field, type = 'number') => {
                     machineOrder.forEach((machine, index) => {
                         if (index < values.length) {
-                            // 1. NAJPIERW Inicjalizacja obiektów (NAPRAWA BŁĘDU)
                             if (!machines[machine]) machines[machine] = {};
                             if (!waste[machine]) waste[machine] = {};
 
-                            // 2. DOPIERO TERAZ przypisanie referencji
                             const target = targetObj === 'machines' ? machines[machine] : waste[machine];
-
                             const rawVal = values[index];
 
                             if (type === 'number') {
@@ -919,14 +932,16 @@
                     });
                 };
 
-                // Wykonanie parsowania
                 mapValuesToMachines(extractRowValues('Zadrukowano'), 'machines', 'zadrukowano');
                 mapValuesToMachines(extractRowValues('Pobrano'), 'machines', 'pobrano');
                 mapValuesToMachines(extractRowValues('Ilość zleceń'), 'machines', 'zlecenia');
                 mapValuesToMachines(extractRowValues('Klient'), 'machines', 'klient', 'text');
 
+                // Obsługa różnych nazw dla folii (PE/folia vs PE)
+                let wasteLabel = lines.some(l => l.includes('Odpad papier PE/folia')) ? 'Odpad papier PE/folia' : 'Odpad papier PE';
+
                 mapValuesToMachines(extractRowValues('Odpad papier biały'), 'waste', 'bialy');
-                mapValuesToMachines(extractRowValues('Odpad papier PE'), 'waste', 'folia');
+                mapValuesToMachines(extractRowValues(wasteLabel), 'waste', 'folia');
                 mapValuesToMachines(extractRowValues('Odpad opakowanie szare'), 'waste', 'szary');
 
                 return { machines, waste };
@@ -943,6 +958,8 @@
                     'SOMA1': 'SOMA 1', 'SOMA 1': 'SOMA 1',
                     'SOMA2': 'SOMA 2', 'SOMA 2': 'SOMA 2',
                     'SOMA3': 'SOMA 3', 'SOMA 3': 'SOMA 3',
+                    'SOMA4': 'SOMA 4', 'SOMA 4': 'SOMA 4', // Future proof
+                    'SOMA5': 'SOMA 5', 'SOMA 5': 'SOMA 5', // Future proof
                     'NOVOFLEX1': 'NOVOFLEX 1', 'NOVOFLEX 1': 'NOVOFLEX 1'
                 };
 
@@ -1475,64 +1492,81 @@
             }
 
             saveImportedData() {
-                // Zbierz dane z formularza
-                const data = {
-                    date: document.getElementById('edit-date').value,
-                    shift: parseInt(document.getElementById('edit-shift').value),
-                    brigade: document.getElementById('edit-brigade').value,
-                    workers: parseInt(document.getElementById('edit-workers').value),
-                    machines: {},
-                    waste: {},
-                    notes: document.getElementById('edit-notes').value
-                };
+                // Dane z formularza
+                const formDate = document.getElementById('edit-date').value;
+                const formShift = parseInt(document.getElementById('edit-shift').value);
+                const formBrigade = document.getElementById('edit-brigade').value;
 
-                // Zbierz dane maszyn
-                CONFIG.machines.forEach(machine => {
-                    const zadrukowano = document.querySelector(`input[data-machine="${machine}"][data-field="zadrukowano"]`).value;
-                    const pobrano = document.querySelector(`input[data-machine="${machine}"][data-field="pobrano"]`).value;
-                    const zlecenia = document.querySelector(`input[data-machine="${machine}"][data-field="zlecenia"]`).value;
-                    const klient = document.querySelector(`input[data-machine="${machine}"][data-field="klient"]`).value;
-
-                    if (zadrukowano || pobrano || zlecenia || klient) {
-                        data.machines[machine] = {
-                            zadrukowano: parseInt(zadrukowano) || 0,
-                            pobrano: parseInt(pobrano) || 0,
-                            zlecenia: parseInt(zlecenia) || 0,
-                            klient: klient.trim()
-                        };
-                    }
-
-                    // Odpady
-                    data.waste[machine] = {
-                        bialy: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="bialy"]`).value) || 0,
-                        folia: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="folia"]`).value) || 0,
-                        szary: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="szary"]`).value) || 0
-                    };
-                });
-
-                // Walidacja
-                if (!data.date || !data.brigade) {
+                if (!formDate || !formBrigade) {
                     alert('Wypełnij wymagane pola: Data i Brygada!');
                     return;
                 }
 
+                // 1. Przygotuj nowe dane
+                const newMachines = {};
+                const newWaste = {};
+
+                CONFIG.machines.forEach(machine => {
+                    // Sprawdź czy mamy inputy dla tej maszyny (bo parser mógł znaleźć tylko SOMA 3)
+                    const inputZadruk = document.querySelector(`input[data-machine="${machine}"][data-field="zadrukowano"]`);
+
+                    // Jeśli input istnieje, pobieramy dane
+                    if (inputZadruk) {
+                        newMachines[machine] = {
+                            zadrukowano: parseInt(inputZadruk.value) || 0,
+                            pobrano: parseInt(document.querySelector(`input[data-machine="${machine}"][data-field="pobrano"]`).value) || 0,
+                            zlecenia: parseInt(document.querySelector(`input[data-machine="${machine}"][data-field="zlecenia"]`).value) || 0,
+                            klient: document.querySelector(`input[data-machine="${machine}"][data-field="klient"]`).value.trim()
+                        };
+
+                        newWaste[machine] = {
+                            bialy: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="bialy"]`).value) || 0,
+                            folia: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="folia"]`).value) || 0,
+                            szary: parseInt(document.querySelector(`input[data-machine="${machine}"][data-type="szary"]`).value) || 0
+                        };
+                    }
+                });
+
+                const newNotes = document.getElementById('edit-notes').value;
+                const newWorkers = parseInt(document.getElementById('edit-workers').value);
+
+                // 2. Pobierz istniejące dane (aby zrobić MERGE)
+                const key = `${formDate}-${formShift}-${formBrigade}`;
+                const existingData = this.storage.getAll()[key] || { machines: {}, waste: {}, notes: '' };
+
+                // 3. Połącz dane (Nowe nadpisują stare tylko dla konkretnych maszyn)
+                const mergedMachines = { ...existingData.machines, ...newMachines };
+                const mergedWaste = { ...existingData.waste, ...newWaste };
+
+                // Notatki łączymy
+                let mergedNotes = existingData.notes || '';
+                if (newNotes && !mergedNotes.includes(newNotes)) {
+                    mergedNotes = mergedNotes ? `${mergedNotes}\n---\n${newNotes}` : newNotes;
+                }
+
+                const finalData = {
+                    date: formDate,
+                    shift: formShift,
+                    brigade: formBrigade,
+                    workers: (existingData.workers || 0) + newWorkers, // Sumujemy pracowników ze stref
+                    machines: mergedMachines,
+                    waste: mergedWaste,
+                    notes: mergedNotes
+                };
+
                 // Zapisz
                 try {
-                    const key = this.storage.save(data);
-                    alert(`✅ Dane zapisane pomyślnie!\n\nKlucz: ${key}\nData: ${data.date}\nZmiana: ${data.shift}\nBrygada: ${data.brigade}`);
+                    this.storage.save(finalData);
+                    alert(`✅ Dane zapisane pomyślnie (Scalono)!\n\nKlucz: ${key}`);
 
-                    // Wyczyść formularz
                     document.getElementById('emailInput').value = '';
                     document.getElementById('parsedDataPreview').style.display = 'none';
                     this.tempParsedData = null;
 
-                    // Odśwież dashboard
-                    if (this.currentView === 'dashboard') {
-                        this.renderDashboard();
-                    }
+                    if (this.currentView === 'dashboard') this.renderDashboard();
                 } catch (error) {
                     console.error('Błąd zapisu:', error);
-                    alert('Błąd podczas zapisywania danych: ' + error.message);
+                    alert('Błąd: ' + error.message);
                 }
             }
 
@@ -1700,6 +1734,13 @@
                 });
 
                 submenu.innerHTML = html;
+            }
+
+            switchImportZone(zone) {
+                document.getElementById('instr-main').style.display = zone === 'main' ? 'block' : 'none';
+                document.getElementById('instr-strefa3').style.display = zone === 'strefa3' ? 'block' : 'none';
+                document.getElementById('emailInput').value = '';
+                document.getElementById('parsedDataPreview').style.display = 'none';
             }
 
             selectMachine(machine) {
@@ -1959,7 +2000,7 @@
 
     <!-- Footer with version -->
     <footer style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem;">
-        Flexo PRO Enterprise v0.0.25
+        Flexo PRO Enterprise v0.0.26
     </footer>
 </body>
 </html>
